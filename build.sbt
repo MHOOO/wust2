@@ -31,8 +31,8 @@ lazy val root = project.in(file("."))
     publish := {},
     publishLocal := {},
 
-    addCommandAlias("dev", "~; backend/re-start; frontend/clean; workbench/compile"),
-    addCommandAlias("devfwatch", "~workbench/compile"),
+    addCommandAlias("dev", "~; backend/re-start; frontend/clean; workbench/assets"),
+    addCommandAlias("devfwatch", "~workbench/assets"),
     addCommandAlias("devf", "; backend/re-start; frontend/clean; devfwatch")
   )
 
@@ -120,12 +120,16 @@ lazy val frontend = project
   //TODO: enableReloadWorkflow := true // https://scalacenter.github.io/scalajs-bundler/reference.html#reload-workflow
   )
 
+lazy val generateIndexTask = taskKey[Int]("generate index.html")
+
 lazy val assets = project
   .enablePlugins(SbtWeb, ScalaJSWeb, WebScalaJSBundlerPlugin)
   .settings(
-    unmanagedResourceDirectories in Assets += baseDirectory.value / "public",
+    sourceDirectory in Assets := baseDirectory.value / "public",
     scalaJSProjects := Seq(frontend),
-    pipelineStages in Assets := Seq(scalaJSPipeline, gzip) //TODO zopfli?
+    includeFilter in digest := "*.js",
+    includeFilter in simpleUrlUpdate := "*.html",
+    pipelineStages in Assets := Seq(scalaJSPipeline, digest, simpleUrlUpdate, gzip) //TODO zopfli?
   )
 
 lazy val backend = project
@@ -156,11 +160,12 @@ lazy val test = project
   )
 
 lazy val workbench = project.in(file("workbench"))
-  .enablePlugins(WorkbenchPlugin, SbtWeb)
-  .dependsOn(assets)
+  .enablePlugins(WorkbenchPlugin, SbtWeb, ScalaJSWeb, WebScalaJSBundlerPlugin)
   .settings(
+    scalaJSProjects := Seq(frontend),
+    pipelineStages in Assets := Seq(scalaJSPipeline),
     watchSources += baseDirectory.value / "index.html", //TODO: does not work. put in assets?
-    compile in Compile := ((compile in Compile) dependsOn WebKeys.assets).value,
+    devCommands in scalaJSPipeline ++= Seq("assets"),
     //TODO: deprecation-warning: https://github.com/sbt/sbt/issues/1444
     //TODO: do not refresh if compilation failed
     refreshBrowsers <<= refreshBrowsers.triggeredBy(compile in Compile)
