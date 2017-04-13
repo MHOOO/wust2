@@ -1,13 +1,8 @@
 name := "wust"
 version in ThisBuild := "0.1.0-SNAPSHOT"
 
-scalaVersion in ThisBuild := "2.11.8"
+scalaVersion in ThisBuild := "2.11.10"
 
-enablePlugins(ScalaJSPlugin, ScalaJSBundlerPlugin)
+enablePlugins(ScalaJSPlugin)
 
-npmDependencies in Compile ++= (
-  "d3" -> "4.6.0" ::
-  Nil
-)
-
-// scalaJSOptimizerOptions in fastOptJS ~= { _.withDisableOptimizer(true) }
+libraryDependencies += "org.scalatest" %%% "scalatest" % "3.0.1" % "test"
