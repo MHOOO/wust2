@@ -2,7 +2,9 @@ package frontend
 
 import org.scalatest._
 
-class ExampleSpec extends FreeSpec with Matchers {
-  println(s"######## test: productionMode = ${scala.scalajs.LinkingInfo.productionMode}")
+class ExampleSpec extends FreeSpec with MustMatchers {
+  "simple test" in {
+    assert(true)
+  }
 }
 
