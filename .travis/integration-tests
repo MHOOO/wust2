@@ -1,8 +1,0 @@
-#!/bin/bash
-set -e
-set -o pipefail
-
-./start test.postgres
-./start test.integration
-./start test.prod.http
-./start test.prod
