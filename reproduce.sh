@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 echo "fastopt:"
-sbt run test | grep production
+sbt clean test
 
 echo "fullopt:"
-sbt "set scalaJSStage in Global := FullOptStage" run test | grep production
+sbt clean "set scalaJSStage in Global := FullOptStage" test
