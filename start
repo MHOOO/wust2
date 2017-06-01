@@ -31,7 +31,7 @@ psql)
     on_stage dev
     # compose run db-migration
     # PGPASSWORD=test psql -h localhost -U wust
-    docker exec -it wustdev_postgres_1 psql -h localhost -U wust ${@:2}
+    docker exec -i wustdev_postgres_1 psql -h localhost -U wust ${@:2}
     ;;
 pgdump)
     on_stage dev
