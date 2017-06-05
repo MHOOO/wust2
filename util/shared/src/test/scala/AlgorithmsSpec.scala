@@ -51,9 +51,11 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
 
       "incident edges" in {
         incidenceList[Int, (Int, Int)](edges, _._1, _._2) mustEqual
-          Map(1 -> Set(1 -> 2, 1 -> 3),
-              2 -> Set(1 -> 2, 2 -> 3),
-              3 -> Set(1 -> 3, 2 -> 3))
+          Map(
+            1 -> Set(1 -> 2, 1 -> 3),
+            2 -> Set(1 -> 2, 2 -> 3),
+            3 -> Set(1 -> 3, 2 -> 3)
+          )
       }
     }
 
@@ -81,12 +83,12 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
   }
 
   "depth first search" - {
-    "one vertex" - {
+    "one vertex" in {
       val dfs = depthFirstSearch[Int](0, _ => Seq.empty).toList
       assert(dfs == List(0))
     }
 
-    "directed cycle" - {
+    "directed cycle" in {
       val edges = Map(
         0 -> Seq(1, 2),
         1 -> Seq(3),
@@ -94,11 +96,12 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
         3 -> Seq(0, 2)
       )
 
-      val dfs = depthFirstSearch[Int](0, edges).toList
-      assert(dfs == List(0, 2, 1, 3))
+      val dfs = depthFirstSearch[Int](0, edges)
+      dfs must contain theSameElementsAs List(0, 2, 1, 3)
+      dfs.startInvolvedInCycle mustBe true
     }
 
-    "undirected cycle" - {
+    "undirected cycle" in {
       val edges = Map(
         0 -> Seq(1, 2),
         1 -> Seq(3),
@@ -106,8 +109,9 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
         3 -> Seq(2)
       )
 
-      val dfs = depthFirstSearch[Int](0, edges).toList
-      assert(dfs == List(0, 2, 1, 3))
+      val dfs = depthFirstSearch[Int](0, edges)
+      dfs must contain theSameElementsAs List(0, 2, 1, 3)
+      dfs.startInvolvedInCycle mustBe false
     }
   }
 
@@ -118,22 +122,22 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
     }
 
     "two isolated vertices" in {
-      val components = connectedComponents[Int](List(0,1), _ => Nil)
+      val components = connectedComponents[Int](List(0, 1), _ => Nil)
       components must contain theSameElementsAs List(Set(0), Set(1))
     }
 
     "cycles" in {
       val edges = Map(
         0 -> Seq(1, 2, 3),
-        1 -> Seq(0,2,3),
-        2 -> Seq(0,1,3),
-        3 -> Seq(0,1,2),
+        1 -> Seq(0, 2, 3),
+        2 -> Seq(0, 1, 3),
+        3 -> Seq(0, 1, 2),
         4 -> Seq(5),
         5 -> Seq(4)
       )
 
       val components = connectedComponents[Int](edges.keys, edges)
-      components must contain theSameElementsAs List(Set(0,1,2,3), Set(4,5))
+      components must contain theSameElementsAs List(Set(0, 1, 2, 3), Set(4, 5))
     }
   }
 
@@ -176,9 +180,14 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
       val tree = redundantSpanningTree(1, (_: Int) => List(2, 3))
       assert(
         tree ==
-          Tree(1,
-               List(Tree(2, List(Tree(3, List.empty))),
-                    Tree(3, List(Tree(2, List.empty))))))
+          Tree(
+            1,
+            List(
+              Tree(2, List(Tree(3, List.empty))),
+              Tree(3, List(Tree(2, List.empty)))
+            )
+          )
+      )
     }
 
     "directed cycle" in {
@@ -192,7 +201,8 @@ class AlgorithmsSpec extends FreeSpec with MustMatchers {
       val tree = redundantSpanningTree(0, edges)
       assert(
         tree ==
-          Tree(0, List(Tree(1, List(Tree(2, List(Tree(3, List.empty))))))))
+          Tree(0, List(Tree(1, List(Tree(2, List(Tree(3, List.empty)))))))
+      )
     }
   }
 }

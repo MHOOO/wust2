@@ -165,6 +165,10 @@ lazy val graph = crossProject
 lazy val graphJS = graph.js
 lazy val graphJVM = graph.jvm
 
+lazy val bench = project
+  .enablePlugins(JmhPlugin)
+  .dependsOn(graphJVM)
+
 lazy val api = crossProject.crossType(CrossType.Pure)
   .dependsOn(graph)
   .settings(commonSettings)

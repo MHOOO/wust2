@@ -1,7 +1,7 @@
 package wust.util
 
 object algorithm {
-  import scala.collection.{IterableLike, breakOut, mutable}
+  import scala.collection.{ IterableLike, breakOut, mutable }
   import scala.math.Ordering
 
   def directedAdjacencyList[V1, E, V2](edges: Iterable[E], inf: E => V1, outf: E => V2): Map[V1, Set[V2]] = { // TODO: Multimap
@@ -71,8 +71,41 @@ object algorithm {
       }
   }
 
-  //TODO: depthfirstsearch producing a sequence
-  def depthFirstSearch[V](start: V, continue: V => Iterable[V]) = new Iterable[V] {
+  trait SeqWithDFSResult[V] extends Seq[V] { def startInvolvedInCycle: Boolean }
+  def depthFirstSearch[V](start: V, continue: V => Iterable[V]): SeqWithDFSResult[V] = {
+    val vertices = new mutable.ArrayBuffer[V] with SeqWithDFSResult[V] {
+      var startInvolvedInCycle = false
+      // def startInvolvedInCycle = _startInvolvedInCycle
+
+    }
+    vertices
+
+    // def iterator = new Iterator[V] {
+
+    //   val stack = mutable.Stack(start)
+    //   val onStack = mutable.Set[V]()
+    //   val seen = mutable.Set[V]()
+
+    //   override def hasNext: Boolean = stack.nonEmpty
+    //   override def next: V = {
+    //     val current = stack.pop
+    //     onStack -= current
+    //     seen += current
+
+    //     for (candidate <- continue(current)) {
+    //       if (candidate == start) _startInvolvedInCycle = true
+    //       if (!seen(candidate) && !onStack(candidate)) {
+    //         stack push candidate
+    //         onStack += candidate
+    //       }
+    //     }
+
+    //     current
+    //   }
+    // }
+  }
+
+  def depthFirstSearchIterator[V](start: V, continue: V => Iterable[V]) = new Iterable[V] {
     private var _startInvolvedInCycle = false
     def startInvolvedInCycle = _startInvolvedInCycle
 
@@ -89,7 +122,7 @@ object algorithm {
         seen += current
 
         for (candidate <- continue(current)) {
-          if(candidate == start) _startInvolvedInCycle = true
+          if (candidate == start) _startInvolvedInCycle = true
           if (!seen(candidate) && !onStack(candidate)) {
             stack push candidate
             onStack += candidate
@@ -99,13 +132,12 @@ object algorithm {
         current
       }
     }
-    iterator.size // consume iterator
   }
 
-  def connectedComponents[V](vertices:Iterable[V], continue: V => Iterable[V]):List[Set[V]] = {
+  def connectedComponents[V](vertices: Iterable[V], continue: V => Iterable[V]): List[Set[V]] = {
     val left = mutable.HashSet.empty ++ vertices
-    var components:List[Set[V]] = Nil
-    while(left.nonEmpty) {
+    var components: List[Set[V]] = Nil
+    while (left.nonEmpty) {
       val next = left.head
       val component = depthFirstSearch(next, continue).toSet
       components ::= component
@@ -135,7 +167,7 @@ object algorithm {
   }
 
   case class Tree[A](element: A, children: Seq[Tree[A]])
-  class TreeContext[A](trees: Tree[A]*)(implicit ordering: Ordering[A])  {
+  class TreeContext[A](trees: Tree[A]*)(implicit ordering: Ordering[A]) {
     private def findParentMap(tree: Tree[A]): Map[Tree[A], Tree[A]] = {
       tree.children.map(child => child -> tree).toMap ++ tree.children.map(findParentMap _).fold(Map.empty)(_ ++ _)
     }
@@ -160,4 +192,3 @@ object algorithm {
     }(breakOut))
   }
 }
-
