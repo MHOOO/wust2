@@ -9,6 +9,9 @@ git.uncommittedSignifier := None // TODO: appends SNAPSHOT to version, but is al
 scalaVersion in ThisBuild := "2.11.11" // TODO: migrate to 2.12 when delegert supports 2.12
 
 lazy val commonSettings = Seq(
+  existingProjectId in versioneye := "58ea970b24ef3e0045217573",
+  publishCrossVersion in versioneye := true,
+
   resolvers ++= (
     ("Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots") ::
     Resolver.jcenterRepo ::
@@ -101,6 +104,7 @@ val scalazVersion = "7.2.13"
 val boopickleVersion = "1.2.6"
 
 lazy val util = crossProject
+  .enablePlugins(VersionEyePlugin)
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= (
@@ -117,6 +121,7 @@ lazy val utilJS = util.js
 lazy val utilJVM = util.jvm
 
 lazy val framework = crossProject
+  .enablePlugins(VersionEyePlugin)
   .dependsOn(util)
   .settings(commonSettings)
   .settings(
@@ -145,6 +150,7 @@ lazy val frameworkJS = framework.js
 lazy val frameworkJVM = framework.jvm
 
 lazy val ids = crossProject
+  .enablePlugins(VersionEyePlugin)
   .settings(commonSettings)
   .settings(
     libraryDependencies ++= (
@@ -160,6 +166,7 @@ lazy val idsJS = ids.js
 lazy val idsJVM = ids.jvm
 
 lazy val graph = crossProject
+  .enablePlugins(VersionEyePlugin)
   .settings(commonSettings)
   .dependsOn(ids)
   .settings(
@@ -173,6 +180,7 @@ lazy val graphJS = graph.js
 lazy val graphJVM = graph.jvm
 
 lazy val api = crossProject.crossType(CrossType.Pure)
+  .enablePlugins(VersionEyePlugin)
   .dependsOn(graph)
   .settings(commonSettings)
   .settings(
@@ -184,6 +192,7 @@ lazy val apiJS = api.js
 lazy val apiJVM = api.jvm
 
 lazy val database = project
+  .enablePlugins(VersionEyePlugin)
   .settings(commonSettings)
   .configs(IntegrationTest)
   .settings(Defaults.itSettings)
@@ -197,6 +206,7 @@ lazy val database = project
   )
 
 lazy val backend = project
+  .enablePlugins(VersionEyePlugin)
   .settings(commonSettings)
   .dependsOn(frameworkJVM, apiJVM, database)
   .configs(IntegrationTest)
@@ -221,6 +231,7 @@ lazy val backend = project
   )
 
 lazy val frontend = project
+  .enablePlugins(VersionEyePlugin)
   .enablePlugins(ScalaJSPlugin, ScalaJSBundlerPlugin)
   .dependsOn(frameworkJS, apiJS, utilJS)
   .settings(commonSettings)
@@ -300,6 +311,7 @@ lazy val assets = project
   )
 
 lazy val systemTest = project
+  .enablePlugins(VersionEyePlugin)
   .configs(IntegrationTest)
   .settings(Defaults.itSettings)
   .settings(commonSettings)
