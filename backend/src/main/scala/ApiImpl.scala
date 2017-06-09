@@ -13,14 +13,14 @@ import scala.concurrent.{ ExecutionContext, Future }
 class ApiImpl(holder: StateHolder[State, ApiEvent], dsl: GuardDsl, db: Db)(implicit ec: ExecutionContext) extends Api {
   import holder._, dsl._
 
-  override def changeGraph(changes: GraphChanges): Future[Boolean] = withUserOrImplicit { (_, _) =>
+  override def changeGraph(changes: GraphChanges): Future[Boolean] = withUserOrImplicit { (state, _) =>
     //TODO rights
     import changes.consistent._
 
     //TODO error handling
     val result = db.ctx.transaction { implicit ec =>
       for {
-        true <- db.post.createPublic(addPosts)
+        true <- db.post.createPublic(addPosts, state.graph.groups.map(_.id).toSet)
         true <- db.connection(addConnections)
         true <- db.containment(addContainments)
         true <- db.ownership(addOwnerships)

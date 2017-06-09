@@ -17,7 +17,7 @@ object DbSpec {
     import db.ctx, ctx._
     ctx.transaction { implicit ec =>
       for {
-        true <- db.post.createPublic(post)
+        true <- db.post.createPublic(post, Set.empty[GroupId])
         true <- db.ownership(Ownership(post.id, groupId))
       } yield true
     }
@@ -38,7 +38,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("ei-D", "dono")
       for {
-        success <- db.post.createPublic(Set(post))
+        success <- db.post.createPublic(Set(post), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -54,7 +54,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val post = Post("ei-D", "dono")
       val post2 = Post("yogo", "girko")
       for {
-        success <- db.post.createPublic(Set(post, post2))
+        success <- db.post.createPublic(Set(post, post2), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -69,8 +69,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("ei-D", "dino")
       for {
-        _ <- db.post.createPublic(Set(post))
-        success <- db.post.createPublic(Set(Post("ei-D", "dino")))
+        _ <- db.post.createPublic(Set(post), Set.empty[GroupId])
+        success <- db.post.createPublic(Set(post), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -86,8 +86,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val post = Post("ei-D", "dino")
       val post2 = Post("dero", "funa")
       for {
-        _ <- db.post.createPublic(Set(post))
-        success <- db.post.createPublic(Set(Post("ei-D", "dino"), post2))
+        _ <- db.post.createPublic(Set(post), Set.empty[GroupId])
+        success <- db.post.createPublic(Set(post, post2), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -103,8 +103,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("ei-D", "dono")
       for {
-        _ <- db.post.createPublic(Set(post))
-        success <- db.post.createPublic(Set(Post("ei-D", "dino")))
+        _ <- db.post.createPublic(Set(post), Set.empty[GroupId])
+        success <- db.post.createPublic(Set(Post("ei-D", "dino")), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -120,8 +120,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val post = Post("ei-D", "dono")
       val post2 = Post("heide", "haha")
       for {
-        _ <- db.post.createPublic(Set(post))
-        success <- db.post.createPublic(Set(Post("ei-D", "dino"), post2))
+        _ <- db.post.createPublic(Set(post), Set.empty[GroupId])
+        success <- db.post.createPublic(Set(Post("ei-D", "dino"), post2), Set.empty[GroupId])
 
         queriedPosts <- ctx.run(query[Post])
         queriedOwnerships <- ctx.run(query[Ownership])
@@ -137,7 +137,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("hege", "walt")
       for {
-        true <- db.post.createPublic(post)
+        true <- db.post.createPublic(post, Set.empty[GroupId])
         getPost <- db.post.get(post.id)
       } yield {
         getPost mustEqual Option(post)
@@ -157,7 +157,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("harnig", "delauf")
       for {
-        true <- db.post.createPublic(post)
+        true <- db.post.createPublic(post, Set.empty[GroupId])
         success <- db.post.update(post.copy(title = "harals"))
         queriedPosts <- ctx.run(query[Post])
       } yield {
@@ -181,7 +181,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       import db._, db.ctx, ctx._
       val post = Post("harnig", "delauf")
       for {
-        true <- db.post.createPublic(post)
+        true <- db.post.createPublic(post, Set.empty[GroupId])
         success <- db.post.delete(post.id)
         queriedPosts <- ctx.run(query[Post])
       } yield {
@@ -209,8 +209,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val targetPost = Post("r", "yo")
       val connection = Connection("t", "r")
       for {
-        true <- db.post.createPublic(sourcePost)
-        true <- db.post.createPublic(targetPost)
+        true <- db.post.createPublic(sourcePost, Set.empty[GroupId])
+        true <- db.post.createPublic(targetPost, Set.empty[GroupId])
         success <- db.connection(connection)
         connections <- ctx.run(query[Connection])
       } yield {
@@ -225,8 +225,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val targetPost = Post("r", "yo")
       val connection = Connection("t", "r")
       for {
-        true <- db.post.createPublic(sourcePost)
-        true <- db.post.createPublic(targetPost)
+        true <- db.post.createPublic(sourcePost, Set.empty[GroupId])
+        true <- db.post.createPublic(targetPost, Set.empty[GroupId])
         true <- db.connection(connection)
         success <- db.connection(connection)
         connections <- ctx.run(query[Connection])
@@ -242,8 +242,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val targetPost = Post("r", "yo")
       val connection = Connection("t", "r")
       for {
-        true <- db.post.createPublic(sourcePost)
-        true <- db.post.createPublic(targetPost)
+        true <- db.post.createPublic(sourcePost, Set.empty[GroupId])
+        true <- db.post.createPublic(targetPost, Set.empty[GroupId])
         true <- db.containment(Containment(sourcePost.id, targetPost.id))
         true <- db.containment(Containment(targetPost.id, sourcePost.id))
         success <- db.connection(connection)
@@ -259,7 +259,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val targetPost = Post("r", "yo")
       val connection = Connection("t", "r")
       for {
-        true <- db.post.createPublic(targetPost)
+        true <- db.post.createPublic(targetPost, Set.empty[GroupId])
         success <- db.connection(connection)
         connections <- ctx.run(query[Connection])
       } yield {
@@ -273,7 +273,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val sourcePost = Post("r", "yo")
       val connection = Connection("r", "t")
       for {
-        true <- db.post.createPublic(sourcePost)
+        true <- db.post.createPublic(sourcePost, Set.empty[GroupId])
         success <- db.connection(connection)
         connections <- ctx.run(query[Connection])
       } yield {
@@ -300,8 +300,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val targetPost = Post("r", "yo")
       val connection = Connection("t", "r")
       for {
-        true <- db.post.createPublic(sourcePost)
-        true <- db.post.createPublic(targetPost)
+        true <- db.post.createPublic(sourcePost, Set.empty[GroupId])
+        true <- db.post.createPublic(targetPost, Set.empty[GroupId])
         true <- db.connection(connection)
 
         deleted <- db.connection.delete(connection)
@@ -332,8 +332,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val child = Post("r", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(parent)
-        true <- db.post.createPublic(child)
+        true <- db.post.createPublic(parent, Set.empty[GroupId])
+        true <- db.post.createPublic(child, Set.empty[GroupId])
         success <- db.containment(containment)
         containments <- ctx.run(query[Containment])
       } yield {
@@ -348,8 +348,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val child = Post("r", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(parent)
-        true <- db.post.createPublic(child)
+        true <- db.post.createPublic(parent, Set.empty[GroupId])
+        true <- db.post.createPublic(child, Set.empty[GroupId])
         true <- db.containment(containment)
         success <- db.containment(containment)
         containments <- ctx.run(query[Containment])
@@ -365,8 +365,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val child = Post("r", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(parent)
-        true <- db.post.createPublic(child)
+        true <- db.post.createPublic(parent, Set.empty[GroupId])
+        true <- db.post.createPublic(child, Set.empty[GroupId])
         true <- db.connection(Connection(parent.id, child.id))
         true <- db.connection(Connection(child.id, parent.id))
         success <- db.containment(containment)
@@ -382,7 +382,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val child = Post("r", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(child)
+        true <- db.post.createPublic(child, Set.empty[GroupId])
         success <- db.containment(containment)
         containments <- ctx.run(query[Containment])
       } yield {
@@ -396,7 +396,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val parent = Post("t", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(parent)
+        true <- db.post.createPublic(parent, Set.empty[GroupId])
         success <- db.containment(containment)
         containments <- ctx.run(query[Containment])
       } yield {
@@ -423,8 +423,8 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
       val child = Post("r", "yo")
       val containment = Containment("t", "r")
       for {
-        true <- db.post.createPublic(parent)
-        true <- db.post.createPublic(child)
+        true <- db.post.createPublic(parent, Set.empty[GroupId])
+        true <- db.post.createPublic(child, Set.empty[GroupId])
         true <- db.containment(containment)
 
         success <- db.containment.delete(containment)
@@ -771,7 +771,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
         val post = Post("id", "p")
         for {
           Some(user) <- db.user("u", "123456")
-          true <- db.post.createPublic(post)
+          true <- db.post.createPublic(post, Set.empty[GroupId])
           hasAccess <- db.group.hasAccessToPost(user.id, post.id)
         } yield hasAccess mustBe true
       }
@@ -807,9 +807,9 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
         val postB = Post("b", "B")
         val postC = Post("c", "C")
         for {
-          true <- db.post.createPublic(postA)
-          true <- db.post.createPublic(postB)
-          true <- db.post.createPublic(postC)
+          true <- db.post.createPublic(postA, Set.empty[GroupId])
+          true <- db.post.createPublic(postB, Set.empty[GroupId])
+          true <- db.post.createPublic(postC, Set.empty[GroupId])
           conn = Connection(postA.id, postB.id)
           cont = Containment(postB.id, postC.id)
           true <- db.connection(conn)
@@ -835,12 +835,12 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
           Some((_, membership, group)) <- db.group.createForUser(user.id)
 
           postA = Post("A", "sehe")
-          true <- db.post.createPublic(postA)
+          true <- db.post.createPublic(postA, Set.empty[GroupId])
           postB = Post("B", "cehen")
           ownershipB = Ownership(postB.id, group.id)
           true <- createOwned(db, postB, group.id)
           postC = Post("C", "geh")
-          true <- db.post.createPublic(postC)
+          true <- db.post.createPublic(postC, Set.empty[GroupId])
           conn = Connection(postA.id, postB.id)
           cont = Containment(postB.id, postC.id)
           true <- db.connection(conn)
@@ -866,11 +866,11 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
         for {
           Some(user) <- db.user("heigo", "parwin")
           postA = Post("A", "sei")
-          true <- db.post.createPublic(postA)
+          true <- db.post.createPublic(postA, Set.empty[GroupId])
           postB = Post("B", "rete")
-          true <- db.post.createPublic(postB)
+          true <- db.post.createPublic(postB, Set.empty[GroupId])
           postC = Post("C", "dete")
-          true <- db.post.createPublic(postC)
+          true <- db.post.createPublic(postC, Set.empty[GroupId])
           conn = Connection(postA.id, postB.id)
           cont = Containment(postB.id, postC.id)
           true <- db.connection(conn)
@@ -915,14 +915,14 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
           Some((_, membership, group)) <- db.group.createForUser(user.id)
 
           postA = Post("A", "heit")
-          true <- db.post.createPublic(postA)
+          true <- db.post.createPublic(postA, Set.empty[GroupId])
 
           postB = Post("b", "asd")
           ownershipB = Ownership(postB.id, group.id)
 
           true <- createOwned(db, postB, group.id)
           postC = Post("C", "derlei")
-          true <- db.post.createPublic(postC)
+          true <- db.post.createPublic(postC, Set.empty[GroupId])
 
           conn = Connection(postA.id, postB.id)
           true <- db.connection(conn)
@@ -952,7 +952,7 @@ class DbSpec extends DbIntegrationTestSpec with MustMatchers {
           Some((_, otherMembership, otherGroup)) <- db.group.createForUser(otherUser.id)
 
           postA = Post("hei", "selor")
-          true <- db.post.createPublic(postA)
+          true <- db.post.createPublic(postA, Set.empty[GroupId])
 
           postB = Post("id", "hasnar")
           ownershipB = Ownership(postB.id, group.id)

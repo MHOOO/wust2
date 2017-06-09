@@ -9,15 +9,36 @@ import scala.concurrent.duration._
 import scalaz.Tag
 import wust.ids._
 import wust.util._
+import wust.util.collection._
 import scala.util.{ Try, Success, Failure }
 
-object Db {
-  def apply(config: Config) = {
-    new Db(new PostgresAsyncContext[LowerCase](config))
+//TODO: workaround for https://github.com/getquill/quill/issues/651
+trait TupleQuery { this: io.getquill.context.Context[_, _] =>
+  def liftTuples[T1: Encoder, T2: Encoder](l: List[(T1, T2)]): Quoted[Query[(T1, T2)]] =
+    liftTuples(l, (t: (T1, T2)) => infix"(${lift(t._1)}, ${lift(t._2)})")
+
+  def liftTuples[T1: Encoder, T2: Encoder, T3: Encoder](l: List[(T1, T2, T3)]): Quoted[Query[(T1, T2, T3)]] =
+    liftTuples(l, (t: (T1, T2, T3)) => infix"(${lift(t._1)}, ${lift(t._2)}, ${lift(t._3)})")
+
+  def liftTuples[T1: Encoder, T2: Encoder, T3: Encoder, T4: Encoder](l: List[(T1, T2, T3, T4)]): Quoted[Query[(T1, T2, T3, T4)]] =
+    liftTuples(l, (t: (T1, T2, T3, T4)) => infix"(${lift(t._1)}, ${lift(t._2)}, ${lift(t._3)}, ${lift(t._4)})")
+
+  private def liftTuples[T, U](l: List[T], f: T => Quoted[Any]): Quoted[Query[U]] = {
+    l match {
+      case Nil          => infix"".as[Query[U]]
+      case head :: Nil  => infix"${f(head)}".as[Query[U]]
+      case head :: tail => infix"${f(head)}, ${liftTuples(tail, f)}".as[Query[U]]
+    }
   }
 }
 
-class Db(val ctx: PostgresAsyncContext[LowerCase]) {
+object Db {
+  def apply(config: Config) = {
+    new Db(new PostgresAsyncContext[LowerCase](config) with TupleQuery)
+  }
+}
+
+class Db(val ctx: PostgresAsyncContext[LowerCase] with TupleQuery) {
   import data._
   import ctx._
 
@@ -42,14 +63,37 @@ class Db(val ctx: PostgresAsyncContext[LowerCase]) {
   object post {
     // post ids are unique, so the methods can assume that at max 1 row was touched in each operation
 
-    private val insert = quote { (post: RawPost) => query[RawPost].insert(post).ignoreDuplicates } //TODO FIXME this should only DO NOTHING if id and title are equal to db row. now this will hide conflict on post ids!!
+    private val insert = quote { (post: RawPost) => query[RawPost].insert(post).ignoreDuplicates }
 
-    def createPublic(post: Post)(implicit ec: ExecutionContext): Future[Boolean] = createPublic(Set(post))
-    def createPublic(posts: Set[Post])(implicit ec: ExecutionContext): Future[Boolean] = {
-      val rawPosts = posts.map(RawPost(_, false))
-      ctx.run(liftQuery(rawPosts.toList).foreach(insert(_)))
-        .map(_.forall(_ <= 1))
+    def createPublic(post: Post, userGroupIds: Seq[GroupId])(implicit ec: ExecutionContext): Future[Boolean] = createPublic(Set(post), userGroupIds)
+    def createPublic(posts: Set[Post], userGroupIds: Seq[GroupId])(implicit ec: ExecutionContext): Future[Boolean] = {
+      val rawPosts = posts.map(RawPost(_, false)).toList
+
+      ctx.transaction { implicit ec: ExecutionContext =>
+        ctx.run(liftQuery(rawPosts).foreach(insert(_)))
+          .flatMap { postResults =>
+            val noActions = (rawPosts zip postResults).collect { case (post, 0) => post }
+            noActions.isEmpty match {
+              // in case that the "on conflict do nothing" from the insert triggers, then 0 rows have been inserted/updated
+              // this can have two reasons:
+              // 1) the post was added again (same id and title), as graph changes should be idempotent, we accept that. but we need to check whether the post is actually visible to the user. otherwise an attacker could hijack a private post with knowledge about the id and title.
+              // 2) we have a uuid conflict, with different title or the post is not visible to the current user. then we reject.
+              case false =>
+                val noActionTuples = noActions.map(p => p.id -> p.title)
+                (for {
+                  posts <- ctx.run(query[RawPost].filter(p => liftTuples(noActionTuples).contains((p.id, p.title))).map(_.id))
+                  if posts.size == noActions.size
+                  postGroups <- getGroupIds(noActions.map(_.id).toSet)
+                } yield posts.forall { postId =>
+                  postGroups.get(postId).collect {
+                    case groups if groups.isEmpty || userGroupIds.exists(groups) => true
+                  }.getOrElse(false)
+                }).recoverValue(false)
+              case true => Future.successful(true)
             }
+          }
+      }
+    }
 
     def get(postId: PostId)(implicit ec: ExecutionContext): Future[Option[Post]] = {
       ctx.run(query[Post].filter(_.id == lift(postId)).take(1))
