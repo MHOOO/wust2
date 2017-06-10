@@ -257,6 +257,30 @@ object TreeView {
     )
   }
 
+  def newItem(state: GlobalState)(implicit ctx: Ctx.Owner): Frag = {
+    val area = textfield(
+      "",
+      onblur := { (event: Event) =>
+        val elem = event.target.asInstanceOf[HTMLElement]
+        val addPost = Post.newId(elem.textContent)
+        state.persistence.addChanges(addPosts = Set(addPost))
+      },
+      onkeydown := { (event: KeyboardEvent) =>
+          onKey(event) {
+            case KeyCode.Enter if !event.shiftKey =>
+              event.target.asInstanceOf[HTMLElement].blur()
+              false
+          }
+      }
+    ).render
+
+    div(
+      display.flex,
+      "+",
+      area
+    )
+  }
+
   def postTreeItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
     val childNodes = tree.children
       .sortBy(_.element)
@@ -285,9 +309,10 @@ object TreeView {
       val trees = rootPosts.map(redundantSpanningTree[Post](_, postChildren _))
       val context = new TreeContext(trees: _*)
 
+      val items = trees.map(postTreeItem(state, context, _))
       div(
         padding := "100px",
-        trees.map(postTreeItem(state, context, _))
+        if (items.isEmpty) Seq(newItem(state)) else items
       ).render
     })
   }
