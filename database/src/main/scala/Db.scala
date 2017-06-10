@@ -168,22 +168,18 @@ class Db(val ctx: PostgresAsyncContext[LowerCase]) {
       ctx.run(q).map(id => user.copy(id = id))
     }
 
-    //TODO one query
-    def activateImplicitUser(id: UserId, name: String, passwordDigest: Array[Byte])(implicit ec: ExecutionContext): Future[Option[User]] = {
-      ctx.transaction { implicit ec =>
-        ctx.run(query[User].filter(u => u.id == lift(id) && u.isImplicit == true))
-          .flatMap(_.headOption.map { user =>
-            val updatedUser = user.copy(
-              name = name,
-              isImplicit = false,
-              revision = user.revision + 1
-            )
-            for {
-              _ <- ctx.run(query[User].filter(_.id == lift(id)).update(lift(updatedUser)))
-              _ <- ctx.run(query[Password].insert(lift(Password(id, passwordDigest))))
-            } yield Option(updatedUser)
-          }.getOrElse(Future.successful(None)))
-      }.recoverValue(None)
+    def activateImplicitUser(id: UserId, name: String, digest: Array[Byte])(implicit ec: ExecutionContext): Future[Option[User]] = {
+      val user = newRealUser(name)
+      val q = quote { s"""
+        with existingUser as (
+          UPDATE "user" SET isimplicit = true, revision = revision + 1 WHERE id = ${lift(id)} and isimplicit = true RETURNING revision
+        )
+        INSERT INTO password(id, digest) values(${lift(id)}, ${lift(digest)}) RETURNING existingUser.revision;
+      """}
+
+      ctx.executeActionReturning(q, identity, _(0).asInstanceOf[Int], "revision")
+        .map(rev => Option(user.copy(revision = rev)))
+        // .recoverValue(None)
     }
 
     //TODO: http://stackoverflow.com/questions/5347050/sql-to-list-all-the-tables-that-reference-a-particular-column-in-a-table (at compile-time?)

@@ -13,7 +13,7 @@ function sbt_with_args() {
     args="${@:1}"
     [ -n "$override_sbt_args" ] && args="$override_sbt_args"
 
-    WUST_STAGE=dev sbt -Dquill.macro.log=false $args
+    WUST_STAGE=dev sbt -Dquill.macro.log=true $args
 }
 
 function self() { "$script_file" $@; }
