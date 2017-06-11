@@ -12,6 +12,7 @@ lazy val commonSettings = Seq(
     ("Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots") ::
     Resolver.jcenterRepo ::
     Resolver.bintrayRepo("daxten", "maven") :: // for Daxten/autowire
+    ("jitpack" at "https://jitpack.io") ::
     Nil
   ),
 
@@ -233,7 +234,7 @@ lazy val frontend = project
       "com.lihaoyi" %%% "scalatags" % "0.6.5" ::
       "com.github.fdietze" %%% "scalarx" % "0.3.3-SNAPSHOT" ::
       "com.github.fdietze" %%% "vectory" % "0.1.0" ::
-      "com.github.fdietze" %%% "scala-js-d3v4" % "0.1.0-SNAPSHOT" ::
+      "com.github.fdietze" %%% "scala-js-d3v4" % "master-SNAPSHOT" ::
       "com.github.cornerman" %% "derive" % "0.1.0-SNAPSHOT" ::
       "com.github.cornerman" %% "delegert" % "0.1.0-SNAPSHOT" ::
       Nil

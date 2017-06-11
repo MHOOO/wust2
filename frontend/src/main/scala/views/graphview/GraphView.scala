@@ -2,6 +2,8 @@ package wust.frontend.views.graphview
 
 import org.scalajs.d3v4._
 import org.scalajs.dom
+import org.scalajs.dom.window
+import org.scalajs.dom.raw.HTMLElement
 import rx._
 import wust.frontend.Color._
 import wust.frontend.PostCreatorMenu
@@ -92,7 +94,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         svg.call(d3State.zoom.scaleBy _, 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
       }), br(),
       iconButton("0", title := "reset zoom", onclick := { () =>
-        svg.call(d3State.zoom.transform _, d3.zoomIdentity) //TODO: transition for smooth animation
+      recalculateBoundsAndZoom()
       }), br(),
       iconButton("-", title := "zoom out", onclick := { () =>
         svg.call(d3State.zoom.scaleBy _, 1 / 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
@@ -127,6 +129,45 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       .style("background-color", mixColors(List(mixedDirectParentColors, d3.lab("#FFFFFF"), d3.lab("#FFFFFF"))).toString)
   }
 
+  val windowDimensions = Var(Vec2(window.innerWidth, window.innerHeight))
+  window.addEventListener("resize", { _: dom.Event =>
+    windowDimensions() = Vec2(window.innerWidth, window.innerHeight)
+  })
+
+  Rx {
+    windowDimensions();
+    recalculateBoundsAndZoom()
+  }
+
+  def recalculateBoundsAndZoom() {
+    import Math._
+    //TODO: use size of graph div
+    // https://marcj.github.io/css-element-queries/
+    // val padding = 15
+    val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
+    val width = rect.width
+    val height = rect.height
+    if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
+      val postsArea = rxSimPosts.now.map(p => p.collisionRadius * p.collisionRadius).sum * 4 * 4
+      println(s"$width x $height / $postsArea")
+      val scale = (sqrt(width * height) / sqrt(postsArea)) min 2
+
+      svg.call(d3State.zoom.transform _, d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale))
+
+      d3State.forces.meta.rectBound.xOffset = -width / 2 / scale
+      d3State.forces.meta.rectBound.yOffset = -height / 2 / scale
+      d3State.forces.meta.rectBound.width = width / scale
+      d3State.forces.meta.rectBound.height = height / scale
+
+      rxSimPosts.now.foreach { simPost =>
+        simPost.fixedPos = js.undefined
+      }
+      d3State.simulation.alpha(1).restart()
+    }
+  }
+
   Rx { rxDisplayGraph(); rxSimPosts(); rxSimConnection(); rxSimContainment() }.foreach { _ =>
     val simPosts = rxSimPosts.now
     val simConnection = rxSimConnection.now
@@ -144,6 +185,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.containment.links(simContainment)
     d3State.forces.collapsedContainment.links(simCollapsedContainment)
 
+    // recalculateBoundsAndZoom()
     d3State.simulation.alpha(1).restart()
   }
 
@@ -159,7 +201,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.zoom
       .on("zoom", () => zoomed())
       .clickDistance(10) // interpret short drags as clicks
-    svg.call(d3State.zoom)
+    svg.call(d3State.zoom) // activate pan + zoom on svg
 
     svg.on("click", { () =>
       if (state.postCreatorMenus.now.size == 0 && focusedPostId.now == None) {
