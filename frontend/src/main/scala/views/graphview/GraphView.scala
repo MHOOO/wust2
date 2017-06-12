@@ -7,8 +7,8 @@ import org.scalajs.dom.raw.HTMLElement
 import rx._
 import wust.frontend.Color._
 import wust.frontend.PostCreatorMenu
-import wust.frontend.{ DevOnly, GlobalState }
-import org.scalajs.dom.{ console }
+import wust.frontend.{DevOnly, GlobalState}
+import org.scalajs.dom.{console}
 import wust.graph._
 import wust.util.Pipe
 import scala.concurrent.ExecutionContext
@@ -148,7 +148,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val width = rect.width
     val height = rect.height
     if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
-      val postsArea = rxSimPosts.now.map(p => p.collisionRadius * p.collisionRadius).sum * 4 * 4
+      val postsArea = rxSimPosts.now.map(p => p.collisionRadius * p.collisionRadius).sum * 4 * 2
       println(s"$width x $height / $postsArea")
       val scale = (sqrt(width * height) / sqrt(postsArea)) min 2
 
@@ -174,6 +174,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val simRedirectedConnection = rxSimRedirectedConnection.now
     val simContainment = rxSimContainment.now
     val simCollapsedContainment = rxSimCollapsedContainment.now
+    val graph = rxDisplayGraph.now.graph
 
     DevOnly {
       println("    updating graph simulation")
@@ -185,8 +186,11 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.containment.links(simContainment)
     d3State.forces.collapsedContainment.links(simCollapsedContainment)
 
-    // recalculateBoundsAndZoom()
+    d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
+
     d3State.simulation.alpha(1).restart()
+    draw()
+    recalculateBoundsAndZoom()
   }
 
   private def onPostDrag() {
@@ -243,12 +247,12 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
   private def draw() {
     postSelection.draw()
-    postMenuSelection.draw()
-    connectionLineSelection.draw()
-    redirectedConnectionLineSelection.draw()
-    connectionElementSelection.draw()
+    // postMenuSelection.draw()
+    // connectionLineSelection.draw()
+    // redirectedConnectionLineSelection.draw()
+    // connectionElementSelection.draw()
     containmentHullSelection.draw()
-    collapsedContainmentHullSelection.draw()
+    // collapsedContainmentHullSelection.draw()
   }
 
   private def initContainerDimensionsAndPositions() {

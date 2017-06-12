@@ -152,37 +152,43 @@ class Forces {
   // val gravityY = d3.forceY[SimPost]()
   val repel = d3.forceManyBody[SimPost]()
   val collision = d3.forceCollide[SimPost]() //TODO: rectangle collision detection?
-  val distance = d3.forceCollide[SimPost]()
+  // val distance = d3.forceCollide[SimPost]()
   val connection = d3.forceLink[SimPost, SimConnection]()
   val redirectedConnection = d3.forceLink[SimPost, SimRedirectedConnection]()
   val containment = d3.forceLink[SimPost, SimContainment]()
   val collapsedContainment = d3.forceLink[SimPost, SimCollapsedContainment]()
   //TODO: push posts out of containment clusters they don't belong to
   val meta = new MetaForce
+
+  def updatedPostSizes(posts: js.Array[SimPost]) {
+    repel.initialize(posts)
+    collision.initialize(posts)
+  }
 }
+
 object Forces {
   def apply() = {
     val forces = new Forces
 
-    forces.repel.strength((p: SimPost) => -p.collisionRadius * 3)
-    forces.repel.distanceMax(1500)
+    forces.repel.strength((p: SimPost) => -p.collisionRadius * 5)
+    forces.repel.distanceMax(1000)
     // forces.repel.theta(0.0) // 0 disables approximation
 
     forces.collision.radius((p: SimPost) => p.collisionRadius)
     // forces.collision.strength(0.9)
 
-    forces.distance.radius((p: SimPost) => p.collisionRadius + 600)
-    forces.distance.strength(0.01)
+    // forces.distance.radius((p: SimPost) => p.collisionRadius + 600)
+    // forces.distance.strength(0.01)
 
     forces.connection.distance(200)
     forces.connection.strength(0.3)
     forces.redirectedConnection.distance(200)
     forces.redirectedConnection.strength(0.2)
 
-    forces.containment.distance(200)
-    forces.containment.strength(0.1)
-    forces.collapsedContainment.distance(400)
-    forces.collapsedContainment.strength(0.1)
+    forces.containment.distance(300)
+    forces.containment.strength(0.02)
+    // forces.collapsedContainment.distance(400)
+    // forces.collapsedContainment.strength(0.05)
 
     // forces.gravityX.strength(0.001)
     // forces.gravityY.strength(0.001)
@@ -197,13 +203,13 @@ object Simulation {
     // .alphaTarget(1)
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
-    .force("repel", forces.repel)
-  .force("collision", forces.collision)
-  // // .force("distance", forces.distance)
-  // .force("meta", forces.meta)
-  // .force("connection", forces.connection)
-  // .force("redirectedConnection", forces.redirectedConnection)
-  // .force("containment", forces.containment)
+    // .force("repel", forces.repel)
+    .force("collision", forces.collision)
+    // // .force("distance", forces.distance)
+    .force("meta", forces.meta)
+    // .force("connection", forces.connection)
+    // .force("redirectedConnection", forces.redirectedConnection)
+    .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
 }
 

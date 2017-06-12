@@ -68,7 +68,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
     //   val maxRadius = simPosts.maxBy(_.radius).radius
     //   simPosts.foreach { _.collisionRadius = maxRadius }
     // }
-    // d3State.forces.collision.initialize(post.data)
+    d3State.forces.updatedPostSizes(post.data)
   }
 
   private var draw = 0
@@ -94,6 +94,13 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       // .style("left", (p: SimPost) => s"${p.x.get + p.centerOffset.x}px")
       // .style("top", (p: SimPost) => s"${p.y.get + p.centerOffset.y}px")
       .style("transform", (p: SimPost) => s"translate(${p.x.get + p.centerOffset.x}px,${p.y.get + p.centerOffset.y}px)")
+      .style("width", (p: SimPost) => s"${p.collisionRadius * 2}px")
+      .style("max-width", (p: SimPost) => s"${p.collisionRadius * 2}px")
+      .style("height", (p: SimPost) => s"${p.collisionRadius * 2}px")
+      .style("border-radius", (p: SimPost) => s"${p.collisionRadius}px")
+      .style("display", "flex")
+      .style("align-items", "center")
+      .style("text-align", "center")
 
     draw += 1
   }
