@@ -23,11 +23,11 @@ import scala.scalajs.js
 import scalatags.rx.all._
 import scala.scalajs.js.timers.setTimeout
 import org.scalajs.dom.ext.KeyCode
-import org.scalajs.dom.{ Event, KeyboardEvent }
+import org.scalajs.dom.{ DragEvent, Event, KeyboardEvent }
 
 //TODO proper ordering and move to wust.ids
 object PostOrdering extends Ordering[Post] {
-  def compare(a: Post, b: Post) = Tag.unwrap(a.id) compare Tag.unwrap(b.id)
+  def compare(a: Post, b: Post): Int = Tag.unwrap(a.id) compare Tag.unwrap(b.id)
 }
 
 object TreeView {
@@ -36,24 +36,38 @@ object TreeView {
   //TODO better?
   private var focusedPostId: Option[PostId] = None
 
-  implicit val postOrdering = PostOrdering
+  private implicit val postOrdering = PostOrdering
+
+  private object DataKeys {
+    val postId = "postId"
+    val prevPostId = "prevPostId"
+  }
 
   // preserves newlines and white spaces: white-space: pre
   def textfield = div(contenteditable := "true", style := "white-space: pre", width := "80ex")
 
-  def movePoint(postId: PostId) = div(
-    paddingLeft := "5px", paddingRight := "5px", cursor := "pointer",
-    span("☰"),
-    ondragstart := { (e: Event) =>
-      console.log("dend", e)
-    },
-    ondragend := { (e: Event) =>
-      console.log("dstart", e)
-    },
-    ondrop := { (e: Event) =>
-      console.log("drobbing", e)
-    }
-  )
+  def movePoint(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
+    val post = tree.element
+    val prevId = c.previousMap.get(tree).map(_.element.id)
+    val isDragged = Var(false)
+
+    div(
+      paddingLeft := "5px", paddingRight := "5px", cursor := "pointer",
+      color := Rx { if (isDragged()) "blue" else "inherit" },
+      "☰",
+      draggable := true,
+      ondragstart := { (e: DragEvent) =>
+        e.dataTransfer.setData(DataKeys.postId, Tag.unwrap(post.id))
+        e.dataTransfer.setData(DataKeys.prevPostId, prevId.map(Tag.unwrap _).getOrElse(""))
+        isDragged() = true
+      },
+      ondragend := { (e: DragEvent) =>
+        e.dataTransfer.clearData(DataKeys.postId)
+        e.dataTransfer.clearData(DataKeys.prevPostId)
+        isDragged() = false
+      }
+    )
+  }
 
   def bulletPoint(state: GlobalState, postId: PostId) = div(
     paddingLeft := "5px", paddingRight := "5px", cursor := "pointer",
@@ -75,7 +89,6 @@ object TreeView {
       state.persistence.addChangesEnriched(delPosts = Seq(postId), delContainments = containments)
     }
   )
-
   def nextInParent(elem: HTMLElement, next: HTMLElement => Option[HTMLElement]): Option[HTMLElement] = {
     val sibling = next(elem)
     sibling orElse {
@@ -109,10 +122,10 @@ object TreeView {
   }
 
   def focusUp(elem: HTMLElement) = {
-    nextInParent(elem.parentElement.parentElement.parentElement, findNextTextfield(_, backwards = true)).foreach(focusAndSetCursor _)
+    nextInParent(elem, findNextTextfield(_, backwards = true)).foreach(focusAndSetCursor _)
   }
   def focusDown(elem: HTMLElement) = {
-    nextInParent(elem.parentElement.parentElement.parentElement, findNextTextfield(_, backwards = false)).foreach(focusAndSetCursor _)
+    nextInParent(elem, findNextTextfield(_, backwards = false)).foreach(focusAndSetCursor _)
   }
 
   def textAroundCursorSelection(elem: HTMLElement) = {
@@ -148,52 +161,47 @@ object TreeView {
         val newPost = Post.newId(newPostText)
         //TODO: do not create empty post, create later when there is a title
         focusedPostId = Some(newPost.id)
-        c.parentMap.get(tree) match {
-          case Some(parentTree) =>
-            val newContainment = Containment(parentTree.element.id, newPost.id)
-            state.persistence.addChangesEnriched(addPosts = Set(newPost), addContainments = Set(newContainment), updatePosts = updatedPost.toSet)
-          case None =>
-            val selection = state.graphSelection.now
-            val containments = GraphSelection.toContainments(selection, newPost.id)
-            state.persistence.addChangesEnriched(addPosts = Set(newPost), addContainments = containments, updatePosts = updatedPost.toSet)
+        val containments = c.parentMap.get(tree) match {
+          case Some(parentTree) => Set(Containment(parentTree.element.id, newPost.id))
+          case None             => GraphSelection.toContainments(state.graphSelection.now, newPost.id)
+        }
+
+        state.persistence.addChangesEnriched(addPosts = Set(newPost), addContainments = containments, updatePosts = updatedPost.toSet)
+        false
+      case KeyCode.Tab if !event.shiftKey =>
+        c.previousMap.get(tree).foreach { previousTree =>
+          val newContainment = Containment(previousTree.element.id, post.id)
+          val delContainment = c.parentMap.get(tree).map { parentTree =>
+            Containment(parentTree.element.id, post.id)
+          }
+          focusedPostId = Some(post.id)
+          state.persistence.addChanges(addContainments = Set(newContainment), delContainments = delContainment.toSet)
         }
         false
-      case KeyCode.Tab => event.shiftKey match {
-        case false =>
-          c.previousMap.get(tree).foreach { previousTree =>
-            val newContainment = Containment(previousTree.element.id, post.id)
-            val delContainment = c.parentMap.get(tree).map { parentTree =>
-              Containment(parentTree.element.id, post.id)
-            }
-            focusedPostId = Some(post.id)
-            state.persistence.addChanges(addContainments = Set(newContainment), delContainments = delContainment.toSet)
+      case KeyCode.Tab if event.shiftKey =>
+        for {
+          parent <- c.parentMap.get(tree)
+          grandParent = c.parentMap.get(parent)
+        } {
+          val newContainments = grandParent match {
+            case Some(grandParent) => Set(Containment(grandParent.element.id, post.id))
+            case None              => GraphSelection.toContainments(state.graphSelection.now, post.id)
           }
-          false
-        case true =>
-          for {
-            parent <- c.parentMap.get(tree)
-            grandParent = c.parentMap.get(parent)
-          } {
-            val newContainments = grandParent match {
-              case Some(grandParent) => Set(Containment(grandParent.element.id, post.id))
-              case None              => GraphSelection.toContainments(state.graphSelection.now, post.id)
-            }
-            val delContainment = Containment(parent.element.id, post.id)
-            focusedPostId = Some(post.id)
-            state.persistence.addChanges(addContainments = newContainments, delContainments = Set(delContainment))
-          }
-          false
-      }
+          val delContainment = Containment(parent.element.id, post.id)
+          focusedPostId = Some(post.id)
+          state.persistence.addChanges(addContainments = newContainments, delContainments = Set(delContainment))
+        }
+        false
       case KeyCode.Up if !event.shiftKey =>
         val sel = window.getSelection.getRangeAt(0)
-        if (sel.startOffset == sel.endOffset && !elem.textContent.take(sel.startOffset).contains('\n')) {
+        if (sel.collapsed && !elem.textContent.take(sel.startOffset).contains('\n')) {
           focusedPostId = None
           focusUp(elem)
           false
         } else true
       case KeyCode.Down if !event.shiftKey =>
         val sel = window.getSelection.getRangeAt(0)
-        if (sel.startOffset == sel.endOffset && !elem.textContent.drop(sel.endOffset).contains('\n')) {
+        if (sel.collapsed && !elem.textContent.drop(sel.endOffset).contains('\n')) {
           focusedPostId = None
           focusDown(elem)
           false
@@ -201,32 +209,38 @@ object TreeView {
       case KeyCode.Delete if !event.shiftKey =>
         val sel = window.getSelection.getRangeAt(0)
         val textElem = elem.firstChild.asInstanceOf[Text]
-        if (sel.startOffset == textElem.length && sel.endOffset == textElem.length) {
-          c.nextMap.get(tree).map { nextTree =>
-            val nextPost = nextTree.element
-            val updatedPost = post.copy(title = post.title + " " + nextPost.title)
+        if (sel.collapsed && sel.endOffset == textElem.length) {
+          val target = c.nextMap.get(tree).orElse(tree.children.headOption)
+          target.map { targetTree =>
+            val targetPost = targetTree.element
+            val updatedPost = post.copy(title = post.title + " " + targetPost.title)
+            val childPosts = targetTree.children.map(_.element)
+            val containments = childPosts.map(p => Containment(post.id, p.id))
             focusedPostId = Some(post.id)
-            state.persistence.addChanges(updatePosts = Set(updatedPost), delPosts = Set(nextPost.id))
+            state.persistence.addChanges(addContainments = containments.toSet, updatePosts = Set(updatedPost), delPosts = Set(targetPost.id))
             false
           }.getOrElse(true)
         } else true
       case KeyCode.Backspace if !event.shiftKey =>
         val sel = window.getSelection.getRangeAt(0)
-        if (sel.startOffset == 0 && sel.endOffset == 0) {
-          c.previousMap.get(tree).map { previousTree =>
-            val prevPost = previousTree.element
+        if (sel.collapsed && sel.endOffset == 0) {
+          val target = c.previousMap.get(tree).orElse(c.parentMap.get(tree))
+          target.map { targetTree =>
+            val targetPost = targetTree.element
             val (_, remainingText) = textAroundCursorSelection(elem)
-            val updatedPost = prevPost.copy(title = prevPost.title + " " + remainingText)
+            val updatedPost = targetPost.copy(title = targetPost.title + " " + remainingText)
+            val childPosts = tree.children.map(_.element)
+            val containments = childPosts.map(p => Containment(targetPost.id, p.id))
             focusedPostId = None
             focusUp(elem)
-            state.persistence.addChanges(updatePosts = Set(updatedPost), delPosts = Set(post.id))
+            state.persistence.addChanges(addContainments = containments.toSet, updatePosts = Set(updatedPost), delPosts = Set(post.id))
             false
           }.getOrElse(true)
         } else true
     }
   }
 
-  def postItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
+  def postItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
     val post = tree.element
     val area = textfield(
       post.title,
@@ -249,13 +263,46 @@ object TreeView {
       setTimeout(60) { focusAndSetCursor(area) }
     }
 
+    val isHovered = Var(false)
+    val hoverPlaceholder = div(
+      width := "40px", height := "2px", backgroundColor := "blue",
+      display := Rx { if (isHovered()) "block" else "none" }
+    )
+
     div(
-      display.flex,
-      collapseButton(state, post.id),
-      bulletPoint(state, post.id),
-      area,
-      movePoint(post.id),
-      deleteButton(state, post.id)
+      div(
+        display.flex,
+        collapseButton(state, post.id),
+        bulletPoint(state, post.id),
+        area,
+        movePoint(state, c, tree),
+        deleteButton(state, post.id)
+      ),
+      hoverPlaceholder,
+      ondragenter := { (e: Event) =>
+        isHovered() = true
+      },
+      ondragleave := { (e: Event) =>
+        isHovered() = false
+      },
+      ondragover := { (e: DragEvent) =>
+        e.preventDefault() //needed for dropping
+        e.dataTransfer.dropEffect = "move"
+        false
+      },
+      ondrop := { (e: DragEvent) =>
+        e.preventDefault()
+        console.log("drobbing", e)
+        val targetId = PostId(e.dataTransfer.getData(DataKeys.postId))
+        val prevId = e.dataTransfer.getData(DataKeys.prevPostId) match {
+          case "" => None
+          case id => Some(PostId(id))
+        }
+        val connection = Connection(targetId, post.id)
+        val toDelete = prevId.map(Connection(targetId, _)).toSet
+        state.persistence.addChanges(addConnections = Set(connection), delConnections = toDelete)
+        false
+      }
     )
   }
 
@@ -282,7 +329,6 @@ object TreeView {
     setTimeout(60) { focusAndSetCursor(area) }
 
     div(
-      display.flex,
       "create new post: ",
       area
     )
@@ -294,9 +340,8 @@ object TreeView {
       .map(postTreeItem(state, c, _))
       .toList
 
-    div(
+    postItem(state, c, tree)(ctx)(
       paddingLeft := "10px",
-      postItem(state, c, tree),
       childNodes
     )
   }
@@ -304,14 +349,15 @@ object TreeView {
   def apply(state: GlobalState)(implicit ctx: Ctx.Owner) = {
     div(state.displayGraph.map { dg =>
       import dg.graph
-      val rootPosts = graph.posts
-        .filter(p => graph.parents(p.id).isEmpty)
-        .toList
-        .sorted
 
       def postChildren(post: Post): Iterable[Post] = {
         graph.children(post.id).map(graph.postsById(_))
       }
+
+      val rootPosts = graph.posts
+        .filter(p => graph.parents(p.id).isEmpty)
+        .toList
+        .sorted
 
       val trees = rootPosts.map(redundantSpanningTree[Post](_, postChildren _))
       val context = new TreeContext(trees: _*)
