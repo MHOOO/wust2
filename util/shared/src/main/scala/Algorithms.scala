@@ -116,7 +116,7 @@ object algorithm {
 
   def topologicalSort[V, COLL[V]](vertices: IterableLike[V, COLL[V]], successors: V => Iterable[V]): Seq[V] = {
     var sorted: List[V] = Nil
-    val unmarked = mutable.HashSet.empty[V] ++ vertices
+    val unmarked = mutable.LinkedHashSet.empty[V] ++ vertices
     val tempMarked = mutable.HashSet.empty[V]
 
     while (unmarked.nonEmpty) visit(unmarked.head)
@@ -131,7 +131,7 @@ object algorithm {
       }
     }
 
-    sorted
+    sorted.reverse
   }
 
   case class Tree[A](element: A, children: Seq[Tree[A]])
