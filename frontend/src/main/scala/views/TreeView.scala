@@ -43,8 +43,11 @@ object TreeView {
     val prevPostId = "prevPostId"
   }
 
-  // preserves newlines and white spaces: white-space: pre
-  def textfield = div(contenteditable := "true", style := "white-space: pre", width := "80ex")
+  def textfield = div(
+    contenteditable := "true", width := "80ex",
+    // preserves newlines and white spaces: white-space: pre
+    whiteSpace := "pre", wordWrap := "break-word", attr("overflow-wrap") := "break-word",
+  )
 
   def movePoint(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
     val post = tree.element
@@ -166,7 +169,9 @@ object TreeView {
           case None             => GraphSelection.toContainments(state.graphSelection.now, newPost.id)
         }
 
-        state.persistence.addChangesEnriched(addPosts = Set(newPost), addContainments = containments, updatePosts = updatedPost.toSet)
+        val connections = Set(Connection(post.id, newPost.id))
+
+        state.persistence.addChangesEnriched(addPosts = Set(newPost), addConnections = connections, addContainments = containments, updatePosts = updatedPost.toSet)
         false
       case KeyCode.Tab if !event.shiftKey =>
         c.previousMap.get(tree).foreach { previousTree =>
@@ -292,14 +297,13 @@ object TreeView {
       },
       ondrop := { (e: DragEvent) =>
         e.preventDefault()
-        console.log("drobbing", e)
         val targetId = PostId(e.dataTransfer.getData(DataKeys.postId))
         val prevId = e.dataTransfer.getData(DataKeys.prevPostId) match {
           case "" => None
           case id => Some(PostId(id))
         }
-        val connection = Connection(targetId, post.id)
-        val toDelete = prevId.map(Connection(targetId, _)).toSet
+        val connection = Connection(post.id, targetId)
+        val toDelete = prevId.map(Connection(_, targetId)).toSet
         state.persistence.addChanges(addConnections = Set(connection), delConnections = toDelete)
         false
       }
@@ -335,10 +339,18 @@ object TreeView {
   }
 
   def postTreeItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
+    val graph = state.displayGraph.now.graph
+
+    def postConnections(post: Tree[Post]): Iterable[Tree[Post]] = {
+      graph.predecessors(post.element.id).map(id => tree.children.find(_.element.id == id).get) //TODO
+    }
+
     val childNodes = tree.children
       .sortBy(_.element)
+      .topologicalSortBy(postConnections _)
       .map(postTreeItem(state, c, _))
       .toList
+
 
     postItem(state, c, tree)(ctx)(
       paddingLeft := "10px",
@@ -350,6 +362,10 @@ object TreeView {
     div(state.displayGraph.map { dg =>
       import dg.graph
 
+      def postConnections(post: Post): Iterable[Post] = {
+        graph.predecessors(post.id).map(graph.postsById(_))
+      }
+
       def postChildren(post: Post): Iterable[Post] = {
         graph.children(post.id).map(graph.postsById(_))
       }
@@ -358,6 +374,7 @@ object TreeView {
         .filter(p => graph.parents(p.id).isEmpty)
         .toList
         .sorted
+        .topologicalSortBy(postConnections _)
 
       val trees = rootPosts.map(redundantSpanningTree[Post](_, postChildren _))
       val context = new TreeContext(trees: _*)
