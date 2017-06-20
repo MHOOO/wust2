@@ -1,12 +1,13 @@
 package wust.frontend.views.graphview
 
 import org.scalajs.d3v4._
-import org.scalajs.dom.window
+import org.scalajs.dom.{window,console}
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 import scala.scalajs.js.JSConverters._
 import vectory._
 import Math._
+import collection.mutable
 
 @ScalaJSDefined
 abstract class CustomForce[N <: SimulationNode] extends js.Object {
@@ -80,6 +81,22 @@ class MetaForce extends CustomForce[SimPost] {
 
   val rectBound = new RectBound
 
+  def neighbours(quadtree: Quadtree[Int], x: Double, y: Double, r: Double) {
+    val inCircle = mutable.ArrayBuffer.empty[Int]
+    val r2 = r * r
+    console.log("neighbours!")
+    quadtree.visit{
+      (node: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
+        console.log(node.length)
+        def innerNode = node.length.isDefined
+        if(innerNode) {
+          
+        } else {// leaf node
+        }
+        false
+    }
+  }
+
   override def force(alpha: Double) {
     //read pos + vel from simpost
     i = 0
@@ -101,36 +118,37 @@ class MetaForce extends CustomForce[SimPost] {
 
     // repel
     // val mind = 600
-    // var ai = 0
-    // while (ai < n) {
-    //   val ax = pos(ai * 2)
-    //   val ay = pos(ai * 2 + 1)
-    //   val a = Vec2(ax, ay)
+    var ai = 0
+    while (ai < n) {
+      val ax = pos(ai * 2)
+      val ay = pos(ai * 2 + 1)
+      val a = Vec2(ax, ay)
+      neighbours(quadtree, ax, ay, 500)
 
-    //   val bi = quadtree.find(ax, ay) // closest to a
-    //   val bx = pos(bi * 2)
-    //   val by = pos(bi * 2 + 1)
-    //   val b = Vec2(bx, by)
+      // val bi = quadtree.find(ax, ay) // closest to a
+      // val bx = pos(bi * 2)
+      // val by = pos(bi * 2 + 1)
+      // val b = Vec2(bx, by)
 
-    //   val dist = (a - b).length
-    //   if (dist > 0) {
-    //     val bdir = (b - a) / dist
-    //     val adir = bdir * -1
+      // val dist = (a - b).length
+      // if (dist > 0) {
+      //   val bdir = (b - a) / dist
+      //   val adir = bdir * -1
 
-    //     if (dist < mind) {
-    //       vel(ai * 2) += adir.x * alpha
-    //       vel(ai * 2 + 1) += adir.y * alpha
-    //     }
+      //   if (dist < mind) {
+      //     vel(ai * 2) += adir.x * alpha
+      //     vel(ai * 2 + 1) += adir.y * alpha
+      //   }
 
-    //   } else {
-    //     // pos(ai * 2) += jitter
-    //     // pos(ai * 2 + 1) += jitter
-    //     // pos(bi * 2) += jitter
-    //     // pos(bi * 2 + 1) += jitter
-    //   }
+      // } else {
+        // pos(ai * 2) += jitter
+        // pos(ai * 2 + 1) += jitter
+        // pos(bi * 2) += jitter
+        // pos(bi * 2 + 1) += jitter
+      // }
 
-    //   ai += 1
-    // }
+      ai += 1
+    }
 
     // apply forces
     rectBound.force(n, nodes, pos, vel, alpha)
@@ -207,9 +225,9 @@ object Simulation {
     .force("collision", forces.collision)
     // // .force("distance", forces.distance)
     .force("meta", forces.meta)
-    // .force("connection", forces.connection)
-    // .force("redirectedConnection", forces.redirectedConnection)
-    .force("containment", forces.containment)
+  // .force("connection", forces.connection)
+  // .force("redirectedConnection", forces.redirectedConnection)
+  // .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
 }
 

@@ -100,7 +100,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       .style("border-radius", (p: SimPost) => s"${p.collisionRadius}px")
       .style("display", "flex")
       .style("align-items", "center")
-      .style("text-align", "center")
+      .style("justify-content", "space-around")
 
     draw += 1
   }

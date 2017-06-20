@@ -44,7 +44,7 @@ trait ExtendedD3Node extends SimulationNode {
     radius = size.length / 2
     collisionRadius = radius + 10
     // centerOffset = size / -2
-    centerOffset = Vec2(-collisionRadius, -collisionRadius)
+    centerOffset = Vec2(-collisionRadius)
   }
 
   var size: Vec2 = Vec2(0, 0)
