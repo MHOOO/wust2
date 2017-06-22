@@ -86,7 +86,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
     }
     if (onePostHasSizeZero) {
       // if one post has size zero => all posts have size zero
-      // --> recalculate all visible sizes
+      // => recalculate all visible sizes
       recalculateNodeSizes(post)
     }
 
@@ -94,10 +94,10 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       // .style("left", (p: SimPost) => s"${p.x.get + p.centerOffset.x}px")
       // .style("top", (p: SimPost) => s"${p.y.get + p.centerOffset.y}px")
       .style("transform", (p: SimPost) => s"translate(${p.x.get + p.centerOffset.x}px,${p.y.get + p.centerOffset.y}px)")
-      .style("width", (p: SimPost) => s"${p.collisionRadius * 2}px")
-      .style("max-width", (p: SimPost) => s"${p.collisionRadius * 2}px")
-      .style("height", (p: SimPost) => s"${p.collisionRadius * 2}px")
-      .style("border-radius", (p: SimPost) => s"${p.collisionRadius}px")
+      // .style("width", (p: SimPost) => s"${p.radius * 2}px")
+      // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
+      .style("height", (p: SimPost) => s"${p.size.width}px")
+      .style("border-radius", (p: SimPost) => s"${p.radius}px")
       .style("display", "flex")
       .style("align-items", "center")
       .style("justify-content", "space-around")

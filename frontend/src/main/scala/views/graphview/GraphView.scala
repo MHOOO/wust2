@@ -150,7 +150,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
       val postsArea = rxSimPosts.now.map(p => p.collisionRadius * p.collisionRadius).sum * 4 * 2
       println(s"$width x $height / $postsArea")
-      val scale = (sqrt(width * height) / sqrt(postsArea)) min 2
+      val scale = 1//(sqrt(width * height) / sqrt(postsArea)) min 2
 
       svg.call(d3State.zoom.transform _, d3.zoomIdentity
         .translate(width / 2, height / 2)
@@ -189,8 +189,6 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
 
     d3State.simulation.alpha(1).restart()
-    draw()
-    recalculateBoundsAndZoom()
   }
 
   private def onPostDrag() {

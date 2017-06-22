@@ -1,7 +1,7 @@
 package wust.frontend.views.graphview
 
 import org.scalajs.d3v4._
-import org.scalajs.dom.{window,console}
+import org.scalajs.dom.{window, console}
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 import scala.scalajs.js.JSConverters._
@@ -27,7 +27,7 @@ class RectBound {
   var yOffset: Double = -500
   var width: Double = 1000
   var height: Double = 1000
-  var strength: Double = 2
+  var strength: Double = 20
 
   def force(n: Int, nodes: js.Array[SimPost], pos: js.Array[Double], vel: js.Array[Double], alpha: Double) {
     val k = alpha * strength
@@ -39,20 +39,24 @@ class RectBound {
       val xPos = pos(2 * i) - xOffset
       val yPos = pos(2 * i + 1) - yOffset
       if (xPos < xRadius) {
-        pos(2 * i) = xRadius + xOffset
-        // vel(2 * i) =  vel(2 * i) + (xRadius - xPos) * k
+        // pos(2 * i) = xRadius + xOffset
+        vel(2 * i) = vel(2 * i) + (xRadius - xPos) * k
+        // vel(2 * i) =  0
       }
       if (yPos < yRadius) {
-        pos(2 * i + 1) = yRadius + yOffset
-        // vel(2 * i + 1) = vel(2 * i + 1) + (yRadius - yPos) * k
+        // pos(2 * i + 1) = yRadius + yOffset
+        vel(2 * i + 1) = vel(2 * i + 1) + (yRadius - yPos) * k
+        // vel(2 * i + 1) = 0
       }
       if (xPos > width - xRadius) {
-        pos(2 * i) = width - xRadius + xOffset
-        // vel(2 * i) = vel(2 * i) + ((width - xRadius) - xPos) * k
+        // pos(2 * i) = width - xRadius + xOffset
+        vel(2 * i) = vel(2 * i) + ((width - xRadius) - xPos) * k
+        // vel(2 * i) = 0
       }
       if (yPos > height - yRadius) {
-        pos(2 * i + 1) = height - yRadius + yOffset
-        // vel(2 * i + 1) = vel(2 * i + 1) + ((height - yRadius) - yPos) * k
+        // pos(2 * i + 1) = height - yRadius + yOffset
+        vel(2 * i + 1) = vel(2 * i + 1) + ((height - yRadius) - yPos) * k
+        // vel(2 * i + 1) = 0
       }
       i += 1
     }
@@ -81,21 +85,50 @@ class MetaForce extends CustomForce[SimPost] {
 
   val rectBound = new RectBound
 
-  def neighbours(quadtree: Quadtree[Int], x: Double, y: Double, r: Double) {
-    val inCircle = mutable.ArrayBuffer.empty[Int]
+  def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code:Int => Any): Unit = {
+    println("\n\n-------------- findallpointsincircle -------------------")
     val r2 = r * r
-    console.log("neighbours!")
     quadtree.visit{
-      (node: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
-        console.log(node.length)
+      (n: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
+        println("visit")
+        var node = n
         def innerNode = node.length.isDefined
-        if(innerNode) {
-          
-        } else {// leaf node
+        if (!innerNode) {
+          do {
+            var d = node.data
+            println(d)
+            node = node.next
+            println(node)
+          } while (node != js.undefined)
         }
-        false
+        true
+        // x0 >= x || x1 < x || y0 >= y || y1 < y
+        // val rw = x1 - x0
+        // val rh = y1 - y0
+        // val rwh = rw * 0.5
+        // val rhh = rh * 0.5
+        // val centerX = x0 + rwh
+        // val centerY = y0 + rhh
+        // if (Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)) {
+        //   def innerNode = node.length.isDefined
+        //   if (innerNode) {
+        //     false // keep on traversing
+        //   } else { // leaf node
+        //     code(node.data)
+        //     true
+        //   }
+        // } else true // do not traverse deeper as circle is not intersecting this square
     }
   }
+
+  def jitter = scala.util.Random.nextDouble
+
+  // val lookupRadius = 1200 // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+where+r+%3D+600,+h+%3D+3,x%3D0..1200
+  val minVisibleDistance = 200
+  // def dampByDistance(r: Double, d: Double, hardness: Double) = (-tanh(hardness * (d - r) / r) + 1) * 0.5 // approx: if(d == r) 0.5 else if(d < r) 1 else 0
+  // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+*+max(r-x%2F2,1)+where+r+%3D+600,+h+%3D+3,x%3D0..1200
+  // https://www.wolframalpha.com/input/?i=plot+exp(-(x*x*6.90776))+for+x%3D0..1
+  def smoothen(x:Double) = exp(-(x*x*6.90776)) // 0..1 => 1..0.001
 
   override def force(alpha: Double) {
     //read pos + vel from simpost
@@ -114,38 +147,37 @@ class MetaForce extends CustomForce[SimPost] {
       y = (i: Int) => pos(2 * i + 1)
     )
 
-    def jitter = scala.util.Random.nextDouble
-
     // repel
-    // val mind = 600
     var ai = 0
     while (ai < n) {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
-      val a = Vec2(ax, ay)
-      neighbours(quadtree, ax, ay, 500)
+      // val a = Vec2(ax, ay)
+      forAllPointsInCircle(quadtree, ax, ay, minVisibleDistance){bi =>
+        if(bi != ai) {
+          // val bx = pos(bi * 2)
+          // val by = pos(bi * 2 + 1)
+          // val b = Vec2(bx, by)
 
-      // val bi = quadtree.find(ax, ay) // closest to a
-      // val bx = pos(bi * 2)
-      // val by = pos(bi * 2 + 1)
-      // val b = Vec2(bx, by)
+          // val centerDist = (b - a).length
+          // if (centerDist == 0) {
+          //   pos(bi * 2) += jitter
+          //   pos(bi * 2 + 1) += jitter
+          // }
 
-      // val dist = (a - b).length
-      // if (dist > 0) {
-      //   val bdir = (b - a) / dist
-      //   val adir = bdir * -1
+          // val visibleDist = centerDist - nodes(ai).collisionRadius - nodes(bi).collisionRadius
+          println(bi)
+          // if (visibleDist < minVisibleDistance) {
+          //   val dir = (b - a) / centerDist
+          //   val strength = smoothen(visibleDist / minVisibleDistance) * minVisibleDistance
+          //   val push = dir * strength * alpha
+          //   // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 
-      //   if (dist < mind) {
-      //     vel(ai * 2) += adir.x * alpha
-      //     vel(ai * 2 + 1) += adir.y * alpha
-      //   }
-
-      // } else {
-        // pos(ai * 2) += jitter
-        // pos(ai * 2 + 1) += jitter
-        // pos(bi * 2) += jitter
-        // pos(bi * 2 + 1) += jitter
-      // }
+          //   vel(bi * 2) += push.x
+          //   vel(bi * 2 + 1) += push.y
+          // }
+        }
+      }
 
       ai += 1
     }
@@ -166,8 +198,8 @@ class MetaForce extends CustomForce[SimPost] {
 }
 
 class Forces {
-  // val gravityX = d3.forceX[SimPost]()
-  // val gravityY = d3.forceY[SimPost]()
+  val gravityX = d3.forceX[SimPost]()
+  val gravityY = d3.forceY[SimPost]()
   val repel = d3.forceManyBody[SimPost]()
   val collision = d3.forceCollide[SimPost]() //TODO: rectangle collision detection?
   // val distance = d3.forceCollide[SimPost]()
@@ -208,8 +240,8 @@ object Forces {
     // forces.collapsedContainment.distance(400)
     // forces.collapsedContainment.strength(0.05)
 
-    // forces.gravityX.strength(0.001)
-    // forces.gravityY.strength(0.001)
+    forces.gravityX.strength(0.01)
+    forces.gravityY.strength(0.01)
 
     forces
   }
@@ -222,7 +254,7 @@ object Simulation {
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
-    .force("collision", forces.collision)
+    // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
     .force("meta", forces.meta)
   // .force("connection", forces.connection)
