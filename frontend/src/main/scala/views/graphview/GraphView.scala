@@ -188,6 +188,9 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
     d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
 
+    d3State.simulation.tick()
+    draw()
+    recalculateBoundsAndZoom()
     d3State.simulation.alpha(1).restart()
   }
 
@@ -243,7 +246,22 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     postCreatorMenu.draw()
   }
 
+  def now = System.nanoTime
+  var lastDraw:Long = now
+  var durationMin:Long = Long.MaxValue
+  var durationMax:Long = 0
+  var durationSum:Long = 0
+  var n = 0
+  def ms(duration:Long) = s"${duration/1000000}ms"
   private def draw() {
+    // val duration = now - lastDraw
+    // n += 1
+    // durationMin = durationMin min duration
+    // durationMax = durationMax max duration
+    // durationSum += duration
+    // println(s"tick $n: ${ms(duration)} || min: ${ms(durationMin)}, avg: ${ms(durationSum / n)}, max: ${ms(durationMax)}")
+    // lastDraw = now
+
     postSelection.draw()
     // postMenuSelection.draw()
     // connectionLineSelection.draw()

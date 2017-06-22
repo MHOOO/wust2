@@ -27,7 +27,7 @@ class RectBound {
   var yOffset: Double = -500
   var width: Double = 1000
   var height: Double = 1000
-  var strength: Double = 20
+  var strength: Double = 2
 
   def force(n: Int, nodes: js.Array[SimPost], pos: js.Array[Double], vel: js.Array[Double], alpha: Double) {
     val k = alpha * strength
@@ -86,38 +86,23 @@ class MetaForce extends CustomForce[SimPost] {
   val rectBound = new RectBound
 
   def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code:Int => Any): Unit = {
-    println("\n\n-------------- findallpointsincircle -------------------")
-    val r2 = r * r
     quadtree.visit{
       (n: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
-        println("visit")
+        def isLeaf = !n.length.isDefined
         var node = n
-        def innerNode = node.length.isDefined
-        if (!innerNode) {
+        if (isLeaf) {
           do {
-            var d = node.data
-            println(d)
+            code(node.data)
             node = node.next
-            println(node)
           } while (node != js.undefined)
         }
-        true
-        // x0 >= x || x1 < x || y0 >= y || y1 < y
-        // val rw = x1 - x0
-        // val rh = y1 - y0
-        // val rwh = rw * 0.5
-        // val rhh = rh * 0.5
-        // val centerX = x0 + rwh
-        // val centerY = y0 + rhh
-        // if (Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)) {
-        //   def innerNode = node.length.isDefined
-        //   if (innerNode) {
-        //     false // keep on traversing
-        //   } else { // leaf node
-        //     code(node.data)
-        //     true
-        //   }
-        // } else true // do not traverse deeper as circle is not intersecting this square
+        val rw = x1 - x0
+        val rh = y1 - y0
+        val rwh = rw * 0.5
+        val rhh = rh * 0.5
+        val centerX = x0 + rwh
+        val centerY = y0 + rhh
+        !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
     }
   }
 
@@ -152,29 +137,28 @@ class MetaForce extends CustomForce[SimPost] {
     while (ai < n) {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
-      // val a = Vec2(ax, ay)
+      val a = Vec2(ax, ay)
       forAllPointsInCircle(quadtree, ax, ay, minVisibleDistance){bi =>
         if(bi != ai) {
-          // val bx = pos(bi * 2)
-          // val by = pos(bi * 2 + 1)
-          // val b = Vec2(bx, by)
+          val bx = pos(bi * 2)
+          val by = pos(bi * 2 + 1)
+          val b = Vec2(bx, by)
 
-          // val centerDist = (b - a).length
+          val centerDist = (b - a).length
           // if (centerDist == 0) {
           //   pos(bi * 2) += jitter
           //   pos(bi * 2 + 1) += jitter
-          // }
+          // } else {
+            val visibleDist = centerDist - nodes(ai).collisionRadius - nodes(bi).collisionRadius
+            if (visibleDist < minVisibleDistance) {
+              val dir = (b - a) / centerDist
+              val strength = smoothen(visibleDist / minVisibleDistance) * minVisibleDistance
+              val push = dir * strength * alpha
+              // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 
-          // val visibleDist = centerDist - nodes(ai).collisionRadius - nodes(bi).collisionRadius
-          println(bi)
-          // if (visibleDist < minVisibleDistance) {
-          //   val dir = (b - a) / centerDist
-          //   val strength = smoothen(visibleDist / minVisibleDistance) * minVisibleDistance
-          //   val push = dir * strength * alpha
-          //   // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
-
-          //   vel(bi * 2) += push.x
-          //   vel(bi * 2 + 1) += push.y
+              vel(bi * 2) += push.x
+              vel(bi * 2 + 1) += push.y
+            }
           // }
         }
       }
@@ -249,7 +233,7 @@ object Forces {
 
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
-    .alphaMin(0.05) // stop simulation earlier (default = 0.001)
+    .alphaMin(0.001) // stop simulation earlier (default = 0.001)
     // .alphaTarget(1)
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
