@@ -109,13 +109,14 @@ class MetaForce extends CustomForce[SimPost] {
   def jitter = scala.util.Random.nextDouble
 
   // val lookupRadius = 1200 // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+where+r+%3D+600,+h+%3D+3,x%3D0..1200
-  val minVisibleDistance = 200
+  val minVisibleDistance = 10
   // def dampByDistance(r: Double, d: Double, hardness: Double) = (-tanh(hardness * (d - r) / r) + 1) * 0.5 // approx: if(d == r) 0.5 else if(d < r) 1 else 0
   // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+*+max(r-x%2F2,1)+where+r+%3D+600,+h+%3D+3,x%3D0..1200
   // https://www.wolframalpha.com/input/?i=plot+exp(-(x*x*6.90776))+for+x%3D0..1
   def smoothen(x:Double) = exp(-(x*x*6.90776)) // 0..1 => 1..0.001
 
   override def force(alpha: Double) {
+    var maxCollisionRadius = 0.0
     //read pos + vel from simpost
     i = 0
     while (i < n) {
@@ -123,6 +124,7 @@ class MetaForce extends CustomForce[SimPost] {
       pos(i * 2 + 1) = nodes(i).y.get
       vel(i * 2) = nodes(i).vx.get
       vel(i * 2 + 1) = nodes(i).vy.get
+      maxCollisionRadius = maxCollisionRadius max nodes(i).collisionRadius
       i += 1
     }
 
@@ -138,7 +140,7 @@ class MetaForce extends CustomForce[SimPost] {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
       val a = Vec2(ax, ay)
-      forAllPointsInCircle(quadtree, ax, ay, minVisibleDistance){bi =>
+      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).collisionRadius + minVisibleDistance + maxCollisionRadius){bi =>
         if(bi != ai) {
           val bx = pos(bi * 2)
           val by = pos(bi * 2 + 1)
@@ -152,7 +154,7 @@ class MetaForce extends CustomForce[SimPost] {
             val visibleDist = centerDist - nodes(ai).collisionRadius - nodes(bi).collisionRadius
             if (visibleDist < minVisibleDistance) {
               val dir = (b - a) / centerDist
-              val strength = smoothen(visibleDist / minVisibleDistance) * minVisibleDistance
+              val strength = (1 - visibleDist / minVisibleDistance)*10
               val push = dir * strength * alpha
               // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 

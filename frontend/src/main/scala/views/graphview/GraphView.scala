@@ -41,11 +41,7 @@ object GraphView {
 
   def postView(post: Post) = div(
     post.title,
-    maxWidth := "10em",
-    wordWrap := "break-word",
-    padding := "3px 5px",
-    border := "1px solid #444",
-    borderRadius := "3px"
+    cls := "graphpost"
   )
 }
 

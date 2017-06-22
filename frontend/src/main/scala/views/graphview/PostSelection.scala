@@ -16,12 +16,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
 
   override val tag = "div"
   override def enter(post: Enter[SimPost]) {
-    post.append((simPost: SimPost) => GraphView.postView(simPost.post)(
-      title := simPost.title,
-      position.absolute,
-      pointerEvents.auto, // reenable
-      cursor.default
-    ).render)
+    post.append((simPost: SimPost) => GraphView.postView(simPost.post).render)
       //TODO: http://bl.ocks.org/couchand/6394506 distinguish between click and doubleclick, https://stackoverflow.com/questions/42330521/distinguishing-click-and-double-click-in-d3-version-4
       //TODO: Doubleclick -> Focus
       .on("click", { (p: SimPost) =>
@@ -59,9 +54,6 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
       .style("height", (p: SimPost) => s"${p.size.width}px")
       .style("border-radius", (p: SimPost) => s"${p.radius}px")
-      .style("display", "flex")
-      .style("align-items", "center")
-      .style("justify-content", "space-around")
   }
 
   private def recalculateNodeSizes(post: Selection[SimPost]) {
