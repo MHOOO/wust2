@@ -42,16 +42,13 @@ trait ExtendedD3Node extends SimulationNode {
     val rect = node.getBoundingClientRect
     size = Vec2(rect.width, rect.height) / scale
     radius = size.length / 2
-    collisionRadius = radius + 10
-    // centerOffset = size / -2
-    centerOffset = Vec2(-collisionRadius)
+    centerOffset = size / -2
   }
 
   var size: Vec2 = Vec2(0, 0)
   // def rect = pos.map { pos => AARect(pos, size) }
   var centerOffset: Vec2 = Vec2(0, 0)
   var radius: Double = 0
-  var collisionRadius: Double = 0
 
   var dragStart = Vec2(0, 0)
 }

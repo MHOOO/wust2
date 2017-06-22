@@ -33,15 +33,14 @@ class GraphState(val state: GlobalState)(implicit ctx: Ctx.Owner) {
       def mixedDirectParentColors = mixColors(parents.map(baseColor))
       def hasChildren = rawGraph.children(p.id).nonEmpty
 
-      sp.border = "none"
-      // sp.border =
-      //   if (hasChildren) {
-      //     if (collapsedPostIds(p.id))
-      //       s"5px dotted rgba(0,0,0,0.5)"
-      //     else
-      //       s"10px solid ${baseColor(p.id)}"
-      //   } else
-      //     "2px solid rgba(0,0,0,0.2)" // no children
+      sp.border =
+        if (hasChildren) {
+          if (collapsedPostIds(p.id))
+            s"5px dotted rgba(0,0,0,0.5)"
+          else
+            s"10px solid ${baseColor(p.id)}"
+        } else
+          "2px solid rgba(0,0,0,0.2)" // no children
 
       sp.fontSize = if (hasChildren) {
         val factor = fontSizeByDepth(rawGraph.parentDepth(p.id)) * fontSizeByTransitiveChildren(rawGraph.transitiveChildren(p.id).size)

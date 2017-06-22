@@ -144,9 +144,9 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val width = rect.width
     val height = rect.height
     if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
-      val postsArea = rxSimPosts.now.map(p => p.collisionRadius * p.collisionRadius).sum * 4 * 2
+      val postsArea = rxSimPosts.now.map(p => (p.radius+10) * (p.radius+10)).sum * 4
       println(s"$width x $height / $postsArea")
-      val scale = 1//(sqrt(width * height) / sqrt(postsArea)) min 2
+      val scale = (sqrt(width * height) / sqrt(postsArea)) min 2
 
       svg.call(d3State.zoom.transform _, d3.zoomIdentity
         .translate(width / 2, height / 2)
@@ -176,13 +176,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       println("    updating graph simulation")
     }
 
-    d3State.simulation.nodes(simPosts)
-    d3State.forces.connection.links(simConnection)
-    d3State.forces.redirectedConnection.links(simRedirectedConnection)
-    d3State.forces.containment.links(simContainment)
-    d3State.forces.collapsedContainment.links(simCollapsedContainment)
+    d3State.simulation.nodes(simPosts) // also sets initial positions
+    // d3State.forces.connection.links(simConnection)
+    // d3State.forces.redirectedConnection.links(simRedirectedConnection)
+    // d3State.forces.containment.links(simContainment)
+    // d3State.forces.collapsedContainment.links(simCollapsedContainment)
 
-    d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
+    // d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
 
     d3State.simulation.tick()
     draw()

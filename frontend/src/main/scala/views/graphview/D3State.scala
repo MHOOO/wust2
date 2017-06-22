@@ -34,8 +34,8 @@ class RectBound {
     var i = 0
     while (i < n) {
       val node = nodes(i)
-      val xRadius = node.collisionRadius //node.size.x / 2
-      val yRadius = node.collisionRadius //node.size.y / 2
+      val xRadius = node.radius //node.size.x / 2
+      val yRadius = node.radius //node.size.y / 2
       val xPos = pos(2 * i) - xOffset
       val yPos = pos(2 * i + 1) - yOffset
       if (xPos < xRadius) {
@@ -102,7 +102,8 @@ class MetaForce extends CustomForce[SimPost] {
         val rhh = rh * 0.5
         val centerX = x0 + rwh
         val centerY = y0 + rhh
-        !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
+        // !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
+        false
     }
   }
 
@@ -116,7 +117,7 @@ class MetaForce extends CustomForce[SimPost] {
   def smoothen(x:Double) = exp(-(x*x*6.90776)) // 0..1 => 1..0.001
 
   override def force(alpha: Double) {
-    var maxCollisionRadius = 0.0
+    var maxRadius = 0.0
     //read pos + vel from simpost
     i = 0
     while (i < n) {
@@ -124,7 +125,7 @@ class MetaForce extends CustomForce[SimPost] {
       pos(i * 2 + 1) = nodes(i).y.get
       vel(i * 2) = nodes(i).vx.get
       vel(i * 2 + 1) = nodes(i).vy.get
-      maxCollisionRadius = maxCollisionRadius max nodes(i).collisionRadius
+      maxRadius = maxRadius max nodes(i).radius
       i += 1
     }
 
@@ -140,7 +141,7 @@ class MetaForce extends CustomForce[SimPost] {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
       val a = Vec2(ax, ay)
-      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).collisionRadius + minVisibleDistance + maxCollisionRadius){bi =>
+      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){bi =>
         if(bi != ai) {
           val bx = pos(bi * 2)
           val by = pos(bi * 2 + 1)
@@ -151,7 +152,7 @@ class MetaForce extends CustomForce[SimPost] {
           //   pos(bi * 2) += jitter
           //   pos(bi * 2 + 1) += jitter
           // } else {
-            val visibleDist = centerDist - nodes(ai).collisionRadius - nodes(bi).collisionRadius
+            val visibleDist = centerDist - nodes(ai).radius - nodes(bi).radius
             if (visibleDist < minVisibleDistance) {
               val dir = (b - a) / centerDist
               val strength = (1 - visibleDist / minVisibleDistance)*10
@@ -197,8 +198,9 @@ class Forces {
   val meta = new MetaForce
 
   def updatedPostSizes(posts: js.Array[SimPost]) {
-    repel.initialize(posts)
-    collision.initialize(posts)
+    // repel.initialize(posts)
+    // collision.initialize(posts)
+    meta.initialize(posts)
   }
 }
 
@@ -206,14 +208,14 @@ object Forces {
   def apply() = {
     val forces = new Forces
 
-    forces.repel.strength((p: SimPost) => -p.collisionRadius * 5)
+    forces.repel.strength((p: SimPost) => -p.radius * 5)
     forces.repel.distanceMax(1000)
     // forces.repel.theta(0.0) // 0 disables approximation
 
-    forces.collision.radius((p: SimPost) => p.collisionRadius)
+    forces.collision.radius((p: SimPost) => p.radius)
     // forces.collision.strength(0.9)
 
-    // forces.distance.radius((p: SimPost) => p.collisionRadius + 600)
+    // forces.distance.radius((p: SimPost) => p.radius + 600)
     // forces.distance.strength(0.01)
 
     forces.connection.distance(200)

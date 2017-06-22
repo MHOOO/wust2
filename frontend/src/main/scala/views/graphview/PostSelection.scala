@@ -20,7 +20,6 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       //TODO: http://bl.ocks.org/couchand/6394506 distinguish between click and doubleclick, https://stackoverflow.com/questions/42330521/distinguishing-click-and-double-click-in-d3-version-4
       //TODO: Doubleclick -> Focus
       .on("click", { (p: SimPost) =>
-        //TODO: click should not trigger drag
         DevPrintln(s"\nClicked Post: ${p.id} ${p.title}")
         Var.set(
           VarTuple(rxFocusedSimPost, rxFocusedSimPost.now.map(_.id).setOrToggle(p.id)),
@@ -29,6 +28,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       })
       .call(d3.drag[SimPost]()
         .clickDistance(10) // interpret short drags as clicks
+        //TODO: click should not trigger drag
         .on("start", { (simPost: SimPost) =>
           Var.set(
             VarTuple(graphState.state.focusedPostId, None),
@@ -52,8 +52,8 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       post
       // .style("width", (p: SimPost) => s"${p.radius * 2}px")
       // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
-      .style("height", (p: SimPost) => s"${p.size.width}px")
-      .style("border-radius", (p: SimPost) => s"${p.radius}px")
+      // .style("height", (p: SimPost) => s"${p.size.width}px")
+      // .style("border-radius", (p: SimPost) => s"${p.radius}px")
   }
 
   private def recalculateNodeSizes(post: Selection[SimPost]) {
@@ -84,15 +84,13 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       else simPosts(draw % simPosts.size).size.width == 0
 
     }
-    if (onePostHasSizeZero) {
+    // if (onePostHasSizeZero) {
       // if one post has size zero => all posts have size zero
       // => recalculate all visible sizes
       recalculateNodeSizes(post)
-    }
+    // }
 
     post
-      // .style("left", (p: SimPost) => s"${p.x.get + p.centerOffset.x}px")
-      // .style("top", (p: SimPost) => s"${p.y.get + p.centerOffset.y}px")
       .style("transform", (p: SimPost) => s"translate(${p.x.get + p.centerOffset.x}px,${p.y.get + p.centerOffset.y}px)")
 
     draw += 1
