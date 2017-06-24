@@ -155,34 +155,44 @@ object MainView {
     ).render
   }
 
-  def inviteUserToGroupField(state: GlobalState)(implicit ctx: Ctx.Owner) = Rx {
-    (if (state.selectedGroupId().isDefined) {
-      val field = input(tpe := "text", placeholder := "invite user by name").render
-      form(field, input(tpe := "submit", value := "invite"), onsubmit := { () =>
-        val userName = field.value
-        state.selectedGroupId().foreach(Client.api.addMemberByName(_, userName).call().foreach { success =>
-          field.value = ""
-          sendEvent("group", "invitebyname", if (success) "success" else "failure")
-        })
-
-        false
-      }).render
-    } else div().render)
+  def currentGroupIdFromGraphSelection(state: GlobalState)(implicit ctx: Ctx.Owner): Rx[Option[GroupId]] = Rx {
+    state.graphSelection() match {
+      //TODO this just takes the first non-public post from the selection to infer the group
+      case GraphSelection.Union(ids) => ids.flatMap(state.rawGraph().groupsByPostId.getOrElse(_, Set.empty).headOption).headOption
+      case GraphSelection.Root => None
+    }
   }
 
-  def currentGroupInviteLink(state: GlobalState)(implicit ctx: Ctx.Owner): Rx[Option[String]] = {
+  def inviteUserToGroupField(state: GlobalState)(implicit ctx: Ctx.Owner) = currentGroupIdFromGraphSelection(state) match {
+    case Some(groupId)
+      val field = input(tpe := "text", placeholder := "invite user by name").render
+      form(
+        field,
+        input(tpe := "submit", value := "invite"),
+        onsubmit := { () =>
+          val userName = field.value
+          state.selectedGroupId().foreach(Client.api.addMemberByName(_, userName).call().foreach { success =>
+            field.value = ""
+            sendEvent("group", "invitebyname", if (success) "success" else "failure")
+          })
+
+          false
+        }
+      ).render
+    case None => div().render
+  }
+
+  def currentGroupInviteViewConfig(state: GlobalState)(implicit ctx: Ctx.Owner): Rx[Option[String]] = {
     val inviteLink = Var[Option[String]](None)
     Rx {
-      state.selectedGroupId() match {
-        case Some(groupId) =>
-          Client.api.getGroupInviteToken(groupId).call().foreach {
-            //TODO: we should not construct absolute paths here
-            case Some(token) => inviteLink() = Some(s"${location.href.split("#").head}#${ViewConfig.toHash(state.viewConfig())}&invite=$token")
-            case None        =>
-          }
-        case None => inviteLink() = None
+      inviteLink() = state.selectedGroupId() match {
+        case Some(groupId) => Client.api.getGroupInviteToken(groupId).call().map { token =>
+          state.viewConfig().copy(invite = Some(token))
+        }
+        case None => None
       }
     }
+
     inviteLink
   }
 
@@ -308,13 +318,18 @@ object MainView {
         h4("Invite participants to group"),
         groupSelector(state),
         inviteUserToGroupField(state),
-        currentGroupInviteLink(state).map(linkOpt => linkOpt.map{ link =>
-          val linkField = input(tpe := "text", value := link, readonly).render
-          div(
-            linkField,
-            button("copy", onclick := { () => linkField.select(); document.execCommand("Copy") })
-          )
-        }.getOrElse(span()).render)
+        currentGroupInviteViewConfig(state).map(_.map { config =>
+            val link = s"${location.href.split("#").head}#${ViewConfig.toHash(config)}"
+            val linkField = input(tpe := "text", value := link, readonly).render
+            div(
+              linkField,
+              button("copy", onclick := { () => {
+                state.rawGraph.now.groupsByPostId.get(
+                alert("The )
+                linkField.select(); document.execCommand("Copy")
+              })
+            )
+        }).getOrElse(span()).render)
       )
     )
   }

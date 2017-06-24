@@ -61,6 +61,7 @@ class ApiImpl(holder: StateHolder[State, ApiEvent], dsl: GuardDsl, db: Db)(impli
     }
   }
 
+  // TODO: NEVER recover inside transaction!!!
   def addMember(groupId: GroupId, userId: UserId): Future[Boolean] = withUserOrImplicit { (_, user) =>
     db.ctx.transaction { implicit ec =>
       isGroupMember(groupId, user.id) {
