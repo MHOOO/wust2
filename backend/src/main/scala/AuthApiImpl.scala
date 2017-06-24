@@ -15,58 +15,61 @@ class AuthApiImpl(holder: StateHolder[State, ApiEvent], dsl: GuardDsl, db: Db)(i
 
   private def passwordDigest(password: String) = Hasher(password).bcrypt
 
-  private def applyAuthenticationOnState(state: State, auth: Future[Option[JWTAuthentication]]): Future[State] = auth.map {
-    case auth @ Some(_) => state.copy(auth = auth)
-    case None           => State.initial
-  }
+  //==== converting implicit-real users:
+  //TODO: propagate new groups into state?
+  //TODO: propagate name change to the respective groups and the connected clients
 
   def register(name: String, password: String): Future[Boolean] = { (state: State) =>
     val digest = passwordDigest(password)
-    val (auth, success) = state.auth.map(_.user) match {
+    state.auth.map(_.user) match {
       case Some(user) if user.isImplicit =>
-        //TODO: propagate name change to the respective groups
-        val activated = db.user.activateImplicitUser(user.id, name, digest).map(_.map(u => JWT.generateAuthentication(u)))
-        (activated.map(_.orElse(state.auth)), activated.map(_.isDefined))
-      case _ =>
-        val newAuth = db.user(name, digest).map(_.map(u => JWT.generateAuthentication(u)))
-        (newAuth, newAuth.map(_.isDefined))
+        db.user.activateImplicitUser(user.id, name, digest).map(_.map(u => JWT.generateAuthentication(u))).map {
+          case None => respondWithEvents(false)
+          case Some(auth) => respondWithEvents(true, LoggedIn(auth.toAuthentication))
+        }
+      case currentAuth =>
+        db.user(name, digest).map(_.map(u => JWT.generateAuthentication(u))).map {
+          case None if currentAuth.isDefined => respondWithEvents(false, LoggedOut)
+          case None => respondWithEvents(false)
+          case Some(auth) => respondWithEvents(true, LoggedIn(auth.toAuthentication))
+        }
     }
-
-    StateEffect(applyAuthenticationOnState(state, auth), success)
   }
 
   def login(name: String, password: String): Future[Boolean] = { (state: State) =>
     val digest = passwordDigest(password)
-    val implicitAuth = state.auth.filter(_.user.isImplicit)
-    val result = db.user.getUserAndDigest(name).map(_ match {
+    db.user.getUserAndDigest(name).map {
       case Some((user, userDigest)) if (digest hash = userDigest) =>
         //TODO integrate result into response?
-        implicitAuth.foreach { implicitAuth =>
-          //TODO propagate new groups into state?
-          //TODO: propagate name change to the respective groups and the connected clients
-          db.user.mergeImplicitUser(implicitAuth.user.id, user.id).log
+        state.auth.foreach { auth =>
+          if (auth.user.isImplicit)
+            db.user.mergeImplicitUser(auth.user.id, user.id).log
         }
 
-        (Some(JWT.generateAuthentication(user)), true)
-      case _ => (implicitAuth, false)
-    })
-
-    val auth = result.map(_._1)
-    val success = result.map(_._2)
-    StateEffect(applyAuthenticationOnState(state, auth), success)
+        val auth = JWT.generateAuthentication(user)
+        respondWithEvents(true, LoggedIn(auth.toAuthentication))
+      case _ => state.auth match {
+        case None => respondWithEvents(false)
+        case Some(auth) if auth.user.isImplicit => respondWithEvents(false)
+        case Some(_) => respondWithEvents(false, LoggedOut)
+      }
+    }
   }
 
+  //TODO: implicit handling?
   def loginToken(token: Authentication.Token): Future[Boolean] = { (state: State) =>
     val auth = JWT.authenticationFromToken(token).map { auth =>
       for (valid <- db.user.checkIfEqualUserExists(auth.user))
         yield if (valid) Option(auth) else None
     }.getOrElse(Future.successful(None))
 
-    StateEffect(applyAuthenticationOnState(state, auth), auth.map(_.isDefined))
+    auth map {
+      case None => respondWithEvents(false, LoggedOut)
+      case Some(auth) => respondWithEvents(true, LoggedIn(auth.toAuthentication))
+    }
   }
 
   def logout(): Future[Boolean] = { (state: State) =>
-    val auth = Future.successful(None)
-    StateEffect(applyAuthenticationOnState(state, auth), Future.successful(true))
+    Future.successful(respondWithEvents(true, LoggedOut))
   }
 }

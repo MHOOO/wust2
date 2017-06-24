@@ -57,7 +57,6 @@ class ApiRequestHandler(distributor: EventDistributor, stateInterpreter: StateIn
   override def onClientConnect(sender: EventSender[RequestEvent], state: State) = {
     scribe.info(s"client started: $state")
     distributor.subscribe(sender)
-    Future.successful(state)
   }
 
   override def onClientDisconnect(sender: EventSender[RequestEvent], state: State) = {

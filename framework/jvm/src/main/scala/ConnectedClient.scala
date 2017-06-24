@@ -108,7 +108,9 @@ class ConnectedClient[Event, PublishEvent, Error, State](
               if (events.nonEmpty)
             } publishEvents(sender, events)
 
-          switchState(state, holder.state, holder.events, filterOwnEvents)
+          val (newState, events) = switchState(state, validatedState, holder.events)
+          sendEvents(events.map(_.filter(filterOwnEvents)))
+          context.become(withState(newState))
 
           case Left(error) =>
             outgoing ! CallResponse(seqId, Left(error))
@@ -121,14 +123,16 @@ class ConnectedClient[Event, PublishEvent, Error, State](
           events <- transformIncomingEvent(event, validatedState)
         } yield events
 
-        switchState(state, validatedState, newEvents)
+        val (newState, events) = switchState(state, validatedState, newEvents)
+        sendEvents(events)
+        context.become(withState(newState))
 
       case Stop =>
         state.foreach(onClientDisconnect(sender, _))
         context.stop(self)
     }
 
-    def switchState(state: Future[State], newState: Future[State], initialEvents: Future[Seq[Event]] = Future.successful(Seq.empty), sendFilter: Event => Boolean = _ => true) {
+    def switchState(state: Future[State], newState: Future[State], initialEvents: Future[Seq[Event]]): (Future[State], Future[Seq[Event]]) = {
       val events = for {
         state <- state
         newState <- newState
@@ -139,10 +143,10 @@ class ConnectedClient[Event, PublishEvent, Error, State](
       val switchState = for {
         state <- newState
         events <- events
-      } yield if (events.isEmpty) state else applyEventsToState(events, state)
+        switchState <- if (events.isEmpty) Future.successful(state) else applyEventsToState(events, state)
+      } yield switchState
 
-      sendEvents(events.map(_.filter(sendFilter)))
-      context.become(withState(switchState))
+      (switchState, events)
     }
 
     def sendEvents(events: Future[Seq[Event]]) = {

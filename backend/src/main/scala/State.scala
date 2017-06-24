@@ -15,14 +15,20 @@ import scala.concurrent.{ ExecutionContext, Future }
 case class State(auth: Option[JWTAuthentication], graph: Graph) {
   val user = auth.map(_.user)
   override def toString = s"State(${auth.map(_.user.name)}, posts# ${graph.posts.size})"
+
+  def applyEvents(events: Seq[ApiEvent]): State = {
+    //TODO AUTH
+    events.foldLeft(this)((state, event) => state.copyF(auth = LoginUpdate.onEvent(_, event), graph = GraphUpdate.onEvent(_, event)))
+  }
 }
 object State {
   def initial = State(auth = None, graph = Graph.empty)
 }
 
 class StateInterpreter(db: Db)(implicit ec: ExecutionContext) {
-  def applyEventsToState(state: State, events: Seq[ApiEvent]): State = {
-    events.foldLeft(state)((state, event) => state.copyF(graph = GraphUpdate.onEvent(_, event)))
+  private def applyAuthenticationOnState(state: State, auth: Future[Option[JWTAuthentication]]): Future[State] = auth.map {
+    case auth @ Some(_) => state.copy(auth = auth)
+    case None           => State.initial
   }
 
   def triggeredEvents(state: State, event: RequestEvent): Future[Seq[ApiEvent]] = Future.sequence(event.events.map {
@@ -44,8 +50,6 @@ class StateInterpreter(db: Db)(implicit ec: ExecutionContext) {
       println(s"####### ignored Event: $other")
       Future.successful(Nil)
   }).map(_.flatten)
-
-  def validate(state: State): State = state.copyF(auth = _.filterNot(JWT.isExpired))
 
   def stateEvents(state: State)(implicit ec: ExecutionContext): Future[Seq[ApiEvent]] = {
     db.graph.getAllVisiblePosts(state.user.map(_.id))
