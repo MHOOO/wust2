@@ -139,27 +139,28 @@ class MetaForce extends CustomForce[SimPost] {
     while (ai < n) {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
-      val a = Vec2(ax, ay)
       forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){ bi =>
         if (bi != ai) {
           val bx = pos(bi * 2)
           val by = pos(bi * 2 + 1)
-          val b = Vec2(bx, by)
 
-          val centerDist = (b - a).length
+          // val centerDist = (b - a).length
+          val centerDist = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
           // if (centerDist == 0) {
           //   pos(bi * 2) += jitter
           //   pos(bi * 2 + 1) += jitter
           // } else {
           val visibleDist = centerDist - nodes(ai).radius - nodes(bi).radius
           if (visibleDist < minVisibleDistance) {
-            val dir = (b - a) / centerDist
+            val dirx = (bx - ax) / centerDist
+            val diry = (by - ay) / centerDist
             val strength = (1 - visibleDist / minVisibleDistance) * nodes(ai).radius
-            val push = dir * strength * alpha
+            val pushx = dirx * strength * alpha
+            val pushy = diry * strength * alpha
             // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 
-            vel(bi * 2) += push.x
-            vel(bi * 2 + 1) += push.y
+            vel(bi * 2) += pushx
+            vel(bi * 2 + 1) += pushy
           }
           // }
         }
@@ -218,12 +219,12 @@ object Forces {
     // forces.distance.radius((p: SimPost) => p.radius + 600)
     // forces.distance.strength(0.01)
 
-    forces.connection.distance((c: SimConnection) => c.source.radius + 150 + c.target.radius)
+    forces.connection.distance((c: SimConnection) => c.source.radius + 100 + c.target.radius)
     // forces.connection.strength(0.3)
-    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 150 + c.target.radius)
+    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 100 + c.target.radius)
     // forces.redirectedConnection.strength(0.2)
 
-    forces.containment.distance((c: SimContainment) => c.parent.radius + 150 + c.child.radius)
+    forces.containment.distance((c: SimContainment) => c.parent.radius + 100 + c.child.radius)
     // forces.containment.strength(0.02)
     // forces.collapsedContainment.distance(400)
     // forces.collapsedContainment.strength(0.05)
