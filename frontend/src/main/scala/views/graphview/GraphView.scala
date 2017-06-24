@@ -7,8 +7,8 @@ import org.scalajs.dom.raw.HTMLElement
 import rx._
 import wust.frontend.Color._
 import wust.frontend.PostCreatorMenu
-import wust.frontend.{DevOnly, GlobalState}
-import org.scalajs.dom.{console}
+import wust.frontend.{ DevOnly, GlobalState }
+import org.scalajs.dom.{ console }
 import wust.graph._
 import wust.util.Pipe
 import scala.concurrent.ExecutionContext
@@ -57,11 +57,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   import KeyImplicits._
   val container = d3.select(element)
   val focusedParentsHeader = container.append(() => div(textAlign.center, marginTop := 10, fontSize := "200%", position.absolute, width := "100%").render)
+
   val svg = container.append("svg")
   val containmentHullSelection = SelectData.rx(ContainmentHullSelection, rxContainmentCluster)(svg.append("g"))
   val collapsedContainmentHullSelection = SelectData.rx(CollapsedContainmentHullSelection, rxCollapsedContainmentCluster)(svg.append("g"))
   val connectionLineSelection = SelectData.rx(ConnectionLineSelection, rxSimConnection)(svg.append("g"))
   val redirectedConnectionLineSelection = SelectData.rx(RedirectedConnectionLineSelection, rxSimRedirectedConnection)(svg.append("g"))
+  val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
 
   val html = container.append("div")
   val connectionElementSelection = SelectData.rx(new ConnectionElementSelection(graphState), rxSimConnection)(html.append("div"))
@@ -90,7 +92,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         svg.call(d3State.zoom.scaleBy _, 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
       }), br(),
       iconButton("0", title := "reset zoom", onclick := { () =>
-      recalculateBoundsAndZoom()
+        recalculateBoundsAndZoom()
       }), br(),
       iconButton("-", title := "zoom out", onclick := { () =>
         svg.call(d3State.zoom.scaleBy _, 1 / 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
@@ -137,16 +139,16 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
   def recalculateBoundsAndZoom() {
     import Math._
-    //TODO: use size of graph div
+    //TODO: react on size of div
     // https://marcj.github.io/css-element-queries/
     // val padding = 15
     val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
     val width = rect.width
     val height = rect.height
     if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
-      val postsArea = rxSimPosts.now.map(p => (p.radius+10) * (p.radius+10)).sum * 4
+      val postsArea = rxSimPosts.now.map(p => (p.radius + 100) * (p.radius + 100)).sum * 4
       println(s"$width x $height / $postsArea")
-      val scale = (sqrt(width * height) / sqrt(postsArea)) min 2
+      val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
 
       svg.call(d3State.zoom.transform _, d3.zoomIdentity
         .translate(width / 2, height / 2)
@@ -177,10 +179,10 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     }
 
     d3State.simulation.nodes(simPosts) // also sets initial positions
-    // d3State.forces.connection.links(simConnection)
-    // d3State.forces.redirectedConnection.links(simRedirectedConnection)
-    // d3State.forces.containment.links(simContainment)
-    // d3State.forces.collapsedContainment.links(simCollapsedContainment)
+    d3State.forces.connection.links(simConnection)
+    d3State.forces.redirectedConnection.links(simRedirectedConnection)
+    d3State.forces.containment.links(simContainment)
+    d3State.forces.collapsedContainment.links(simCollapsedContainment)
 
     // d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
 
@@ -243,12 +245,12 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   }
 
   def now = System.nanoTime
-  var lastDraw:Long = now
-  var durationMin:Long = Long.MaxValue
-  var durationMax:Long = 0
-  var durationSum:Long = 0
+  var lastDraw: Long = now
+  var durationMin: Long = Long.MaxValue
+  var durationMax: Long = 0
+  var durationSum: Long = 0
   var n = 0
-  def ms(duration:Long) = s"${duration/1000000}ms"
+  def ms(duration: Long) = s"${duration / 1000000}ms"
   private def draw() {
     // val duration = now - lastDraw
     // n += 1
@@ -259,12 +261,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     // lastDraw = now
 
     postSelection.draw()
+    postRadiusSelection.draw()
     // postMenuSelection.draw()
-    // connectionLineSelection.draw()
-    // redirectedConnectionLineSelection.draw()
-    // connectionElementSelection.draw()
+    connectionLineSelection.draw()
+    redirectedConnectionLineSelection.draw()
+    connectionElementSelection.draw()
     containmentHullSelection.draw()
-    // collapsedContainmentHullSelection.draw()
+    collapsedContainmentHullSelection.draw()
   }
 
   private def initContainerDimensionsAndPositions() {

@@ -122,9 +122,4 @@ select {
     word-wrap:break-word;
     padding : 3px 5px;
     border-radius : 3px;
-    pointer-events:auto; /* reenable events */
-    cursor:default;
-    /* display:flex; */
-    /* align-items:center; */
-    /* justify-content:space-around; */
 }

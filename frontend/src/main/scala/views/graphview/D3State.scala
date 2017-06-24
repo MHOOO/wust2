@@ -1,7 +1,7 @@
 package wust.frontend.views.graphview
 
 import org.scalajs.d3v4._
-import org.scalajs.dom.{window, console}
+import org.scalajs.dom.{ window, console }
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 import scala.scalajs.js.JSConverters._
@@ -85,7 +85,7 @@ class MetaForce extends CustomForce[SimPost] {
 
   val rectBound = new RectBound
 
-  def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code:Int => Any): Unit = {
+  def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code: Int => Any): Unit = {
     quadtree.visit{
       (n: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
         def isLeaf = !n.length.isDefined
@@ -102,19 +102,18 @@ class MetaForce extends CustomForce[SimPost] {
         val rhh = rh * 0.5
         val centerX = x0 + rwh
         val centerY = y0 + rhh
-        // !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
-        false
+        !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
     }
   }
 
   def jitter = scala.util.Random.nextDouble
 
   // val lookupRadius = 1200 // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+where+r+%3D+600,+h+%3D+3,x%3D0..1200
-  val minVisibleDistance = 10
+  val minVisibleDistance = 150
   // def dampByDistance(r: Double, d: Double, hardness: Double) = (-tanh(hardness * (d - r) / r) + 1) * 0.5 // approx: if(d == r) 0.5 else if(d < r) 1 else 0
   // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+*+max(r-x%2F2,1)+where+r+%3D+600,+h+%3D+3,x%3D0..1200
   // https://www.wolframalpha.com/input/?i=plot+exp(-(x*x*6.90776))+for+x%3D0..1
-  def smoothen(x:Double) = exp(-(x*x*6.90776)) // 0..1 => 1..0.001
+  def smoothen(x: Double) = exp(-(x * x * 6.90776)) // 0..1 => 1..0.001
 
   override def force(alpha: Double) {
     var maxRadius = 0.0
@@ -141,8 +140,8 @@ class MetaForce extends CustomForce[SimPost] {
       val ax = pos(ai * 2)
       val ay = pos(ai * 2 + 1)
       val a = Vec2(ax, ay)
-      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){bi =>
-        if(bi != ai) {
+      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){ bi =>
+        if (bi != ai) {
           val bx = pos(bi * 2)
           val by = pos(bi * 2 + 1)
           val b = Vec2(bx, by)
@@ -152,16 +151,16 @@ class MetaForce extends CustomForce[SimPost] {
           //   pos(bi * 2) += jitter
           //   pos(bi * 2 + 1) += jitter
           // } else {
-            val visibleDist = centerDist - nodes(ai).radius - nodes(bi).radius
-            if (visibleDist < minVisibleDistance) {
-              val dir = (b - a) / centerDist
-              val strength = (1 - visibleDist / minVisibleDistance)*10
-              val push = dir * strength * alpha
-              // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
+          val visibleDist = centerDist - nodes(ai).radius - nodes(bi).radius
+          if (visibleDist < minVisibleDistance) {
+            val dir = (b - a) / centerDist
+            val strength = (1 - visibleDist / minVisibleDistance) * nodes(ai).radius
+            val push = dir * strength * alpha
+            // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 
-              vel(bi * 2) += push.x
-              vel(bi * 2 + 1) += push.y
-            }
+            vel(bi * 2) += push.x
+            vel(bi * 2 + 1) += push.y
+          }
           // }
         }
       }
@@ -201,6 +200,7 @@ class Forces {
     // repel.initialize(posts)
     // collision.initialize(posts)
     meta.initialize(posts)
+    //TODO: links need to desire a different length
   }
 }
 
@@ -218,13 +218,13 @@ object Forces {
     // forces.distance.radius((p: SimPost) => p.radius + 600)
     // forces.distance.strength(0.01)
 
-    forces.connection.distance(200)
-    forces.connection.strength(0.3)
-    forces.redirectedConnection.distance(200)
-    forces.redirectedConnection.strength(0.2)
+    forces.connection.distance((c: SimConnection) => c.source.radius + 150 + c.target.radius)
+    // forces.connection.strength(0.3)
+    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 150 + c.target.radius)
+    // forces.redirectedConnection.strength(0.2)
 
-    forces.containment.distance(300)
-    forces.containment.strength(0.02)
+    forces.containment.distance((c: SimContainment) => c.parent.radius + 150 + c.child.radius)
+    // forces.containment.strength(0.02)
     // forces.collapsedContainment.distance(400)
     // forces.collapsedContainment.strength(0.05)
 
@@ -245,10 +245,10 @@ object Simulation {
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
     .force("meta", forces.meta)
-  // .force("connection", forces.connection)
-  // .force("redirectedConnection", forces.redirectedConnection)
-  // .force("containment", forces.containment)
-  // .force("collapsedContainment", forces.collapsedContainment)
+    .force("connection", forces.connection)
+    .force("redirectedConnection", forces.redirectedConnection)
+    .force("containment", forces.containment)
+    .force("collapsedContainment", forces.collapsedContainment)
 }
 
 // TODO: run simulation in tests. jsdom timer bug?

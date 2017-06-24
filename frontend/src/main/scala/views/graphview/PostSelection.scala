@@ -10,13 +10,31 @@ import wust.util.EventTracker.sendEvent
 import scalatags.JsDom.all._
 import collection.breakOut
 
+class PostRadiusSelection(graphState: GraphState, d3State: D3State) extends DataSelection[SimPost] {
+  override val tag = "circle"
+  override def update(post: Selection[SimPost]) {
+    post
+      .attr("stroke", "#888")
+      .attr("fill", "#EEE")
+  }
+
+  override def draw(post: Selection[SimPost]) {
+    post
+      .style("transform", (p: SimPost) => s"translate(${p.x.get}px,${p.y.get}px)")
+      .attr("r", (p: SimPost) => p.radius)
+  }
+}
+
 class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag) extends DataSelection[SimPost] {
   import graphState.rxFocusedSimPost
   import postDrag._
 
   override val tag = "div"
   override def enter(post: Enter[SimPost]) {
-    post.append((simPost: SimPost) => GraphView.postView(simPost.post).render)
+    post.append((simPost: SimPost) => GraphView.postView(simPost.post)(
+      pointerEvents.auto, // reenable mouse events
+      cursor.default
+    ).render)
       //TODO: http://bl.ocks.org/couchand/6394506 distinguish between click and doubleclick, https://stackoverflow.com/questions/42330521/distinguishing-click-and-double-click-in-d3-version-4
       //TODO: Doubleclick -> Focus
       .on("click", { (p: SimPost) =>
@@ -49,11 +67,11 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       .text((p: SimPost) => p.title)
 
     recalculateNodeSizes(post)
-      post
-      // .style("width", (p: SimPost) => s"${p.radius * 2}px")
-      // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
-      // .style("height", (p: SimPost) => s"${p.size.width}px")
-      // .style("border-radius", (p: SimPost) => s"${p.radius}px")
+    post
+    // .style("width", (p: SimPost) => s"${p.radius * 2}px")
+    // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
+    // .style("height", (p: SimPost) => s"${p.size.width}px")
+    // .style("border-radius", (p: SimPost) => s"${p.radius}px")
   }
 
   private def recalculateNodeSizes(post: Selection[SimPost]) {
@@ -84,11 +102,11 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       else simPosts(draw % simPosts.size).size.width == 0
 
     }
-    // if (onePostHasSizeZero) {
+    if (onePostHasSizeZero) {
       // if one post has size zero => all posts have size zero
       // => recalculate all visible sizes
       recalculateNodeSizes(post)
-    // }
+    }
 
     post
       .style("transform", (p: SimPost) => s"translate(${p.x.get + p.centerOffset.x}px,${p.y.get + p.centerOffset.y}px)")
