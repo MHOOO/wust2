@@ -16,12 +16,12 @@ class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost],
   def circleSamples(post: SimPost) = for (i <- 0 until n; a = i * step) yield { Vec2(cos(a), sin(a)) * post.radius + post.pos.get } //TODO: memoize
   // def circleSamples(post: SimPost) = AARect(post.pos.get, post.size).corners
 
-  def positions: js.Array[js.Array[Double]] = posts.flatMap(post => circleSamples(post).map(pos => js.Array(pos.x, pos.y)))(breakOut)
-  def convexHull: js.Array[js.Array[Double]] = {
+  def positions: js.Array[js.Tuple2[Double, Double]] = posts.flatMap(post => circleSamples(post).map(pos => js.Tuple2(pos.x, pos.y)))(breakOut)
+  def convexHull: js.Array[js.Tuple2[Double, Double]] = {
     val hull = d3.polygonHull(positions)
     //TODO: how to correctly handle scalajs union type?
     if (hull == null) positions
-    else hull.asInstanceOf[js.Array[js.Array[Double]]]
+    else hull.asInstanceOf[js.Array[js.Tuple2[Double, Double]]]
   }
 }
 

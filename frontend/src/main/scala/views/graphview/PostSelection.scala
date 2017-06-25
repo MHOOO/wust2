@@ -15,7 +15,7 @@ class PostRadiusSelection(graphState: GraphState, d3State: D3State) extends Data
   override def update(post: Selection[SimPost]) {
     post
       .attr("stroke", "#888")
-      .attr("fill", "#EEE")
+      .attr("fill", "transparent")
   }
 
   override def draw(post: Selection[SimPost]) {
@@ -68,25 +68,12 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
 
     recalculateNodeSizes(post)
     post
-    // .style("width", (p: SimPost) => s"${p.radius * 2}px")
-    // .style("max-width", (p: SimPost) => s"${p.radius * 2}px")
-    // .style("height", (p: SimPost) => s"${p.size.width}px")
-    // .style("border-radius", (p: SimPost) => s"${p.radius}px")
   }
 
   private def recalculateNodeSizes(post: Selection[SimPost]) {
     post.each({ (node: HTMLElement, p: SimPost) =>
       p.recalculateSize(node, d3State.transform.k)
     })
-
-    // for each connected component give all posts the maximum collision radius within that component
-    // val graph = graphState.state.displayGraphWithoutParents.now.graph
-    // graph.connectedContainmentComponents.foreach { component =>
-    //   val simPosts: List[SimPost] = component.map(graphState.rxPostIdToSimPost.now)(breakOut)
-    //   val maxRadius = simPosts.maxBy(_.radius).radius
-    //   simPosts.foreach { _.collisionRadius = maxRadius }
-    // }
-    d3State.forces.updatedPostSizes(post.data)
   }
 
   private var draw = 0

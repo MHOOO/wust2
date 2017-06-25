@@ -166,7 +166,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     }
   }
 
-  Rx { rxDisplayGraph(); rxSimPosts(); rxSimConnection(); rxSimContainment() }.foreach { _ =>
+  Rx { rxDisplayGraph(); rxSimPosts(); rxSimConnection(); rxSimContainment(); rxContainmentCluster() }.foreach { _ =>
     val simPosts = rxSimPosts.now
     val simConnection = rxSimConnection.now
     val simRedirectedConnection = rxSimRedirectedConnection.now
@@ -183,6 +183,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.redirectedConnection.links(simRedirectedConnection)
     d3State.forces.containment.links(simContainment)
     d3State.forces.collapsedContainment.links(simCollapsedContainment)
+
+    d3State.forces.meta.setContainmentClusters(rxContainmentCluster.now)
 
     // d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
 

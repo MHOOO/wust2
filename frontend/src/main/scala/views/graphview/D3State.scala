@@ -22,6 +22,31 @@ object CustomForce {
   }
 }
 
+object ForceUtil {
+  def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code: Int => Any): Unit = {
+    quadtree.visit{
+      (n: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
+        def isLeaf = !n.length.isDefined
+        var node = n
+        if (isLeaf) {
+          do {
+            code(node.data)
+            node = node.next
+          } while (node != js.undefined)
+        }
+        val rw = x1 - x0
+        val rh = y1 - y0
+        val rwh = rw * 0.5
+        val rhh = rh * 0.5
+        val centerX = x0 + rwh
+        val centerY = y0 + rhh
+        !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
+    }
+  }
+
+  def jitter = scala.util.Random.nextDouble
+}
+
 class RectBound {
   var xOffset: Double = -500
   var yOffset: Double = -500
@@ -29,7 +54,7 @@ class RectBound {
   var height: Double = 1000
   var strength: Double = 2
 
-  def force(n: Int, nodes: js.Array[SimPost], pos: js.Array[Double], vel: js.Array[Double], alpha: Double) {
+  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], alpha: Double) {
     val k = alpha * strength
     var i = 0
     while (i < n) {
@@ -63,78 +88,12 @@ class RectBound {
   }
 }
 
-@ScalaJSDefined
-class MetaForce extends CustomForce[SimPost] {
-  var n: Int = 0
-  var i: Int = 0
-  var nodes = js.Array[SimPost]()
-  var pos: js.Array[Double] = js.Array()
-  var vel: js.Array[Double] = js.Array()
-  var indices: js.Array[Int] = js.Array()
-  var quadtree: Quadtree[Int] = d3.quadtree()
+class KeepDistance {
+  import ForceUtil._
 
-  override def initialize(nodes: js.Array[SimPost]) {
-    this.nodes = nodes
-    if (nodes.size != n) {
-      n = nodes.size
-      pos = new js.Array(n * 2)
-      vel = new js.Array(n * 2)
-      indices = (0 until n).toJSArray
-    }
-  }
-
-  val rectBound = new RectBound
-
-  def forAllPointsInCircle(quadtree: Quadtree[Int], x: Double, y: Double, r: Double)(code: Int => Any): Unit = {
-    quadtree.visit{
-      (n: QuadtreeNode[Int], x0: Double, y0: Double, x1: Double, y1: Double) =>
-        def isLeaf = !n.length.isDefined
-        var node = n
-        if (isLeaf) {
-          do {
-            code(node.data)
-            node = node.next
-          } while (node != js.undefined)
-        }
-        val rw = x1 - x0
-        val rh = y1 - y0
-        val rwh = rw * 0.5
-        val rhh = rh * 0.5
-        val centerX = x0 + rwh
-        val centerY = y0 + rhh
-        !Algorithms.intersectCircleAARect(x, y, r, centerX, centerY, rw, rh)
-    }
-  }
-
-  def jitter = scala.util.Random.nextDouble
-
-  // val lookupRadius = 1200 // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+where+r+%3D+600,+h+%3D+3,x%3D0..1200
   val minVisibleDistance = 150
-  // def dampByDistance(r: Double, d: Double, hardness: Double) = (-tanh(hardness * (d - r) / r) + 1) * 0.5 // approx: if(d == r) 0.5 else if(d < r) 1 else 0
-  // https://www.wolframalpha.com/input/?i=plot+(-tanh(h*(x-r)%2Fr)%2B1)*0.5+*+max(r-x%2F2,1)+where+r+%3D+600,+h+%3D+3,x%3D0..1200
-  // https://www.wolframalpha.com/input/?i=plot+exp(-(x*x*6.90776))+for+x%3D0..1
-  def smoothen(x: Double) = exp(-(x * x * 6.90776)) // 0..1 => 1..0.001
 
-  override def force(alpha: Double) {
-    var maxRadius = 0.0
-    //read pos + vel from simpost
-    i = 0
-    while (i < n) {
-      pos(i * 2) = nodes(i).x.get
-      pos(i * 2 + 1) = nodes(i).y.get
-      vel(i * 2) = nodes(i).vx.get
-      vel(i * 2 + 1) = nodes(i).vy.get
-      maxRadius = maxRadius max nodes(i).radius
-      i += 1
-    }
-
-    quadtree = d3.quadtree(
-      indices,
-      x = (i: Int) => pos(2 * i),
-      y = (i: Int) => pos(2 * i + 1)
-    )
-
-    // repel
+  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, alpha: Double) {
     var ai = 0
     while (ai < n) {
       val ax = pos(ai * 2)
@@ -168,14 +127,118 @@ class MetaForce extends CustomForce[SimPost] {
 
       ai += 1
     }
+  }
+}
+
+class PushOutOfWrongCluster {
+  import ForceUtil._
+
+  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, clusters: IndexedSeq[ContainmentCluster], alpha: Double) {
+    var ci = 0
+    val cn = clusters.size
+    var ai = 0
+    while (ci < cn) {
+      val cluster = clusters(ci)
+      val hull = cluster.convexHull
+
+      ai = 0
+      while (ai < n) {
+        val apos = js.Tuple2(pos(2 * ai), pos(2 * ai + 1))
+        val aposv = Vec2(pos(2 * ai), pos(2 * ai + 1))
+        val visuallyInCluster = d3.polygonContains(hull, apos)
+        if (visuallyInCluster) {
+          val belongsToCluster = cluster.posts.exists(_.id == nodes(ai).id)
+          if (!belongsToCluster) {
+            val lines = (hull :+ hull.head).sliding(2).map{ ab => Line(Vec2(ab(0)._1, ab(0)._2), Vec2(ab(1)._1, ab(1)._2)) }
+            val closestLine = lines.minBy(_.distance(aposv)) //TODO: stop earlier if under threshold
+
+            // val pointOnLine = closestLine.start + closestLine.vector * ((aposv - closestLine.start) dot closestLine.vector.normalized)
+            val pointOnLine = {
+              import closestLine.{ x1, x2, y1, y2 }
+              import aposv.{ x, y }
+              val m = (y2 - y1) / (x2 - x1)
+              val b = y1 - m * x1
+              val onx = (m * y + x - m * b) / (m * m + 1)
+              val ony = (m * m * y + m * x + b) / (m * m + 1)
+              Vec2(onx, ony)
+            }
+            println(closestLine.distance(aposv) + "  " + (pointOnLine - aposv).length)
+            val pushDir = (pointOnLine - aposv)
+
+            // push out
+            vel(ai * 2) += pushDir.x
+            vel(ai * 2 + 1) += pushDir.y
+          }
+        }
+
+        ai += 1
+      }
+
+      ci += 1
+    }
+  }
+}
+
+@ScalaJSDefined
+class MetaForce extends CustomForce[SimPost] {
+  var n: Int = 0
+  var i: Int = 0
+  var nodes = js.Array[SimPost]()
+  var pos: js.Array[Double] = js.Array()
+  var vel: js.Array[Double] = js.Array()
+  var indices: js.Array[Int] = js.Array()
+  var quadtree: Quadtree[Int] = d3.quadtree()
+
+  var containmentClusters: js.Array[ContainmentCluster] = js.Array()
+
+  override def initialize(nodes: js.Array[SimPost]) {
+    this.nodes = nodes
+    if (nodes.size != n) {
+      n = nodes.size
+      pos = new js.Array(n * 2)
+      vel = new js.Array(n * 2)
+      indices = (0 until n).toJSArray
+    }
+  }
+
+  def setContainmentClusters(clusters: js.Array[ContainmentCluster]) {
+    containmentClusters = clusters
+  }
+
+  val rectBound = new RectBound
+  val keepDistance = new KeepDistance
+  val pushOutOfWrongCluster = new PushOutOfWrongCluster
+
+  override def force(alpha: Double) {
+    var maxRadius = 0.0
+    //read pos + vel from simpost
+    i = 0
+    while (i < n) {
+      pos(i * 2) = nodes(i).x.get
+      pos(i * 2 + 1) = nodes(i).y.get
+      vel(i * 2) = nodes(i).vx.get
+      vel(i * 2 + 1) = nodes(i).vy.get
+      maxRadius = maxRadius max nodes(i).radius
+      i += 1
+    }
+
+    quadtree = d3.quadtree(
+      indices,
+      x = (i: Int) => pos(2 * i),
+      y = (i: Int) => pos(2 * i + 1)
+    )
 
     // apply forces
     rectBound.force(n, nodes, pos, vel, alpha)
+    keepDistance.force(n, nodes, pos, vel, quadtree, maxRadius, alpha)
+    pushOutOfWrongCluster.force(n, nodes, pos, vel, quadtree, maxRadius, containmentClusters, alpha)
+
     //write pos + vel to simpost
     i = 0
     while (i < n) {
-      nodes(i).x = pos(i * 2)
-      nodes(i).y = pos(i * 2 + 1)
+      // currently no force modifies the positions directly
+      // nodes(i).x = pos(i * 2)
+      // nodes(i).y = pos(i * 2 + 1)
       nodes(i).vx = vel(i * 2)
       nodes(i).vy = vel(i * 2 + 1)
       i += 1
@@ -196,13 +259,6 @@ class Forces {
   val collapsedContainment = d3.forceLink[SimPost, SimCollapsedContainment]()
   //TODO: push posts out of containment clusters they don't belong to
   val meta = new MetaForce
-
-  def updatedPostSizes(posts: js.Array[SimPost]) {
-    // repel.initialize(posts)
-    // collision.initialize(posts)
-    meta.initialize(posts)
-    //TODO: links need to desire a different length
-  }
 }
 
 object Forces {
@@ -225,7 +281,7 @@ object Forces {
     // forces.redirectedConnection.strength(0.2)
 
     forces.containment.distance((c: SimContainment) => c.parent.radius + 100 + c.child.radius)
-    // forces.containment.strength(0.02)
+    forces.containment.strength(0.02)
     // forces.collapsedContainment.distance(400)
     // forces.collapsedContainment.strength(0.05)
 
