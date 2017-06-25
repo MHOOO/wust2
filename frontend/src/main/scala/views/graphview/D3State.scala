@@ -133,37 +133,45 @@ class KeepDistance {
 class PushOutOfWrongCluster {
   import ForceUtil._
 
+  val minVisibleDistance = 150
+
   def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, clusters: IndexedSeq[ContainmentCluster], alpha: Double) {
     var ci = 0
     val cn = clusters.size
     var ai = 0
     while (ci < cn) {
       val cluster = clusters(ci)
-      val hull = cluster.convexHull
+      val hull = ConvexPolygon(cluster.convexHull.map(p => Vec2(p._1, p._2)))
 
       ai = 0
       while (ai < n) {
-        val apos = js.Tuple2(pos(2 * ai), pos(2 * ai + 1))
-        val aposv = Vec2(pos(2 * ai), pos(2 * ai + 1))
-        val visuallyInCluster = d3.polygonContains(hull, apos)
+        val center = Vec2(pos(2 * ai), pos(2 * ai + 1))
+        val radius = nodes(ai).radius + minVisibleDistance
+
+        val visuallyInCluster = hull intersects Circle(center, radius)
         if (visuallyInCluster) {
           val belongsToCluster = cluster.posts.exists(_.id == nodes(ai).id)
           if (!belongsToCluster) {
-            val lines = (hull :+ hull.head).sliding(2).map{ ab => Line(Vec2(ab(0)._1, ab(0)._2), Vec2(ab(1)._1, ab(1)._2)) }
-            val closestLine = lines.minBy(_.distance(aposv)) //TODO: stop earlier if under threshold
+            val closestEdge = hull.edges.minBy(_.segmentDistance(center)) //TODO: stop earlier if under threshold
+            val pointOnLine = closestEdge pointProjection center
 
-            // val pointOnLine = closestLine.start + closestLine.vector * ((aposv - closestLine.start) dot closestLine.vector.normalized)
-            val pointOnLine = {
-              import closestLine.{ x1, x2, y1, y2 }
-              import aposv.{ x, y }
-              val m = (y2 - y1) / (x2 - x1)
-              val b = y1 - m * x1
-              val onx = (m * y + x - m * b) / (m * m + 1)
-              val ony = (m * m * y + m * x + b) / (m * m + 1)
-              Vec2(onx, ony)
+            val dir = {
+              if (closestEdge leftOf center) { // circle center outside
+                (center - pointOnLine).normalized
+              } else { // circle center inside
+                (pointOnLine - center).normalized
+              }
             }
-            println(closestLine.distance(aposv) + "  " + (pointOnLine - aposv).length)
-            val pushDir = (pointOnLine - aposv)
+
+            val strength = {
+              if (closestEdge leftOf center) { // circle center outside
+                (1 - (center - pointOnLine).length / radius) * nodes(ai).radius
+              } else { // circle center inside
+                nodes(ai).radius
+              }
+            }
+
+            val pushDir = dir * strength * alpha
 
             // push out
             vel(ai * 2) += pushDir.x
@@ -275,13 +283,13 @@ object Forces {
     // forces.distance.radius((p: SimPost) => p.radius + 600)
     // forces.distance.strength(0.01)
 
-    forces.connection.distance((c: SimConnection) => c.source.radius + 100 + c.target.radius)
+    forces.connection.distance((c: SimConnection) => c.source.radius + 150 + c.target.radius)
     // forces.connection.strength(0.3)
-    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 100 + c.target.radius)
+    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 150 + c.target.radius)
     // forces.redirectedConnection.strength(0.2)
 
-    forces.containment.distance((c: SimContainment) => c.parent.radius + 100 + c.child.radius)
-    forces.containment.strength(0.02)
+    forces.containment.distance((c: SimContainment) => c.parent.radius + 150 + c.child.radius)
+    forces.containment.strength(0.2)
     // forces.collapsedContainment.distance(400)
     // forces.collapsedContainment.strength(0.05)
 
