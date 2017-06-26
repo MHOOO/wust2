@@ -10,13 +10,27 @@ import vectory._
 
 class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost], val depth: Int) {
   val id = parent.id
-  val posts = children :+ parent
-  val n = 32
-  val step = PI * 2.0 / n
-  def circleSamples(post: SimPost) = for (i <- 0 until n; a = i * step) yield { Vec2(cos(a), sin(a)) * post.radius + post.pos.get } //TODO: memoize
-  // def circleSamples(post: SimPost) = AARect(post.pos.get, post.size).corners
+  val posts: IndexedSeq[SimPost] = children :+ parent
+  val postCount = posts.size
+  val sn = 16
+  val step = PI * 2.0 / sn
+  val positionSamples = new js.Array[js.Tuple2[Double, Double]](sn * posts.size)
+  def regenerateCircleSamples() {
+    var i = 0
+    val n = postCount * sn
+    while (i < n) {
+      val a = (i % sn) * step
+      val post = posts(i / sn)
+      val radius = post.radius + 15
+      positionSamples(i) = js.Tuple2(
+        cos(a) * radius + post.x.get,
+        sin(a) * radius + post.y.get
+      )
+      i += 1
+    }
+  }
 
-  def positions: js.Array[js.Tuple2[Double, Double]] = posts.flatMap(post => circleSamples(post).map(pos => js.Tuple2(pos.x, pos.y)))(breakOut)
+  def positions: js.Array[js.Tuple2[Double, Double]] = { regenerateCircleSamples(); positionSamples }
   def convexHull: js.Array[js.Tuple2[Double, Double]] = {
     val hull = d3.polygonHull(positions)
     //TODO: how to correctly handle scalajs union type?
@@ -39,8 +53,8 @@ object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
   // https://codeplea.com/introduction-to-splines
   // https://github.com/d3/d3-shape#curves
   // val curve = d3.curveCardinalClosed
-  // val curve = d3.curveCatmullRomClosed.alpha(0.5)
-  val curve = d3.curveLinearClosed
+  val curve = d3.curveCatmullRomClosed.alpha(0.5)
+  // val curve = d3.curveLinearClosed
   // val curve = d3.curveNatural
 
   override def draw(hull: Selection[ContainmentCluster]) {

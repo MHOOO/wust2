@@ -1,5 +1,6 @@
 package wust.frontend.views.graphview
 
+import wust.frontend.DevPrintln
 import org.scalajs.d3v4._
 import org.scalajs.dom
 import org.scalajs.dom.window
@@ -7,8 +8,8 @@ import org.scalajs.dom.raw.HTMLElement
 import rx._
 import wust.frontend.Color._
 import wust.frontend.PostCreatorMenu
-import wust.frontend.{ DevOnly, GlobalState }
-import org.scalajs.dom.{ console }
+import wust.frontend.{DevOnly, GlobalState}
+import org.scalajs.dom.{console}
 import wust.graph._
 import wust.util.Pipe
 import scala.concurrent.ExecutionContext
@@ -49,7 +50,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   val graphState = new GraphState(state)
   val d3State = new D3State(disableSimulation)
   val postDrag = new PostDrag(graphState, d3State, onPostDrag _, onPostDragEnd _)
-  import state.{ displayGraphWithoutParents => rxDisplayGraph, _ }
+  import state.{displayGraphWithoutParents => rxDisplayGraph, _}
   import graphState._
 
   // prepare containers where we will append elements depending on the data
@@ -63,11 +64,12 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   val collapsedContainmentHullSelection = SelectData.rx(CollapsedContainmentHullSelection, rxCollapsedContainmentCluster)(svg.append("g"))
   val connectionLineSelection = SelectData.rx(ConnectionLineSelection, rxSimConnection)(svg.append("g"))
   val redirectedConnectionLineSelection = SelectData.rx(RedirectedConnectionLineSelection, rxSimRedirectedConnection)(svg.append("g"))
-  val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
+  // val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
+  // val postPaddingRadiusSelection = SelectData.rx(new PostPaddingRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
 
   val html = container.append("div")
   val connectionElementSelection = SelectData.rx(new ConnectionElementSelection(graphState), rxSimConnection)(html.append("div"))
-  val postSelection = SelectData.rx(new PostSelection(graphState, d3State, postDrag), rxSimPosts)(html.append("div"))
+  val postSelection = SelectData.rx(new PostSelection(graphState, d3State, postDrag, updatedNodeSizes _), rxSimPosts)(html.append("div"))
   val draggingPostSelection = SelectData.rxDraw(DraggingPostSelection, postDrag.draggingPosts)(html.append("div")) //TODO: place above ring menu?
 
   val postMenuLayer = container.append("div")
@@ -82,11 +84,28 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val iconButton = button(width := "2.5em", padding := "5px 10px")
     container.append(() => div(
       position.absolute, left := 5, top := 100,
-      iconButton("⟳", title := "automatic layout", onclick := { () =>
+      iconButton("⟳", title := "automatic layout",
+        onmousedown := { () =>
+          rxSimPosts.now.foreach { simPost =>
+            simPost.fixedPos = js.undefined
+          }
+          d3State.simulation.alpha(1).alphaTarget(1).restart()
+        },
+        onmouseup := { () =>
+          d3State.simulation.alphaTarget(0)
+        }), br(),
+      button("tick", onclick := { () =>
         rxSimPosts.now.foreach { simPost =>
           simPost.fixedPos = js.undefined
         }
-        d3State.simulation.alpha(1).restart()
+        d3State.simulation.tick()
+        draw()
+      }), br(),
+      button("draw", onclick := { () =>
+        rxSimPosts.now.foreach { simPost =>
+          simPost.fixedPos = js.undefined
+        }
+        draw()
       }), br(),
       iconButton("+", title := "zoom in", onclick := { () =>
         svg.call(d3State.zoom.scaleBy _, 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
@@ -110,7 +129,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     .attr("orient", "auto")
     .append("svg:path")
     .attr("d", "M 0,-3 L 10,-0.5 L 10,0.5 L0,3")
-    .style("fill", "#8F8F8F")
+    .style("fill", "#666")
 
   initContainerDimensionsAndPositions()
   initEvents()
@@ -145,9 +164,9 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
     val width = rect.width
     val height = rect.height
-    if (width > 0 && height > 0 && rxSimPosts.now.size > 0) {
+    if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
+      DevPrintln("    updating bounds and zoom")
       val postsArea = rxSimPosts.now.map(p => (p.radius + 100) * (p.radius + 100)).sum * 4
-      println(s"$width x $height / $postsArea")
       val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
 
       svg.call(d3State.zoom.transform _, d3.zoomIdentity
@@ -174,9 +193,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     val simCollapsedContainment = rxSimCollapsedContainment.now
     val graph = rxDisplayGraph.now.graph
 
-    DevOnly {
-      println("    updating graph simulation")
-    }
+    DevPrintln("    updating graph simulation")
 
     d3State.simulation.nodes(simPosts) // also sets initial positions
     d3State.forces.connection.links(simConnection)
@@ -186,12 +203,20 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
     d3State.forces.meta.setContainmentClusters(rxContainmentCluster.now)
 
-    // d3State.forces.containment.distance((containment: SimContainment) => Math.sqrt(graph.transitiveChildren(containment.parentId).size) * 1000.0)
+    draw() // triggers updating node sizes
+    // wait for the drawcall and start simulation
+    window.requestAnimationFrame{ (_) =>
+      recalculateBoundsAndZoom()
+      d3State.simulation.alpha(1).restart()
+    }
+  }
 
-    d3State.simulation.tick()
-    draw()
-    recalculateBoundsAndZoom()
-    d3State.simulation.alpha(1).restart()
+  def updatedNodeSizes() {
+    DevPrintln("    updating node sizes")
+    d3State.forces.connection.initialize(rxSimPosts.now)
+    d3State.forces.redirectedConnection.initialize(rxSimPosts.now)
+    d3State.forces.containment.initialize(rxSimPosts.now)
+    d3State.forces.collapsedContainment.initialize(rxSimPosts.now)
   }
 
   private def onPostDrag() {
@@ -263,7 +288,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     // lastDraw = now
 
     postSelection.draw()
-    postRadiusSelection.draw()
+    // postRadiusSelection.draw()
+    // postPaddingRadiusSelection.draw()
     // postMenuSelection.draw()
     connectionLineSelection.draw()
     redirectedConnectionLineSelection.draw()

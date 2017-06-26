@@ -1,13 +1,18 @@
 package wust.frontend.views.graphview
 
 import org.scalajs.d3v4._
-import org.scalajs.dom.{ window, console }
+import org.scalajs.dom.{window, console}
 import scala.scalajs.js
 import scala.scalajs.js.annotation._
 import scala.scalajs.js.JSConverters._
 import vectory._
 import Math._
 import collection.mutable
+import wust.ids._
+
+object Constants {
+  val nodePadding = 150
+}
 
 @ScalaJSDefined
 abstract class CustomForce[N <: SimulationNode] extends js.Object {
@@ -44,44 +49,53 @@ object ForceUtil {
     }
   }
 
+  def forAllPointsInRect(quadtree: Quadtree[Int], x0: Double, y0: Double, x3: Double, y3: Double)(code: Int => Any): Unit = {
+    quadtree.visit{
+      (n: QuadtreeNode[Int], x1: Double, y1: Double, x2: Double, y2: Double) =>
+        def isLeaf = !n.length.isDefined
+        var node = n
+        if (isLeaf) {
+          do {
+            code(node.data)
+            node = node.next
+          } while (node != js.undefined)
+        }
+
+        x1 >= x3 || y1 >= y3 || x2 < x0 || y2 < y0
+    }
+  }
+
   def jitter = scala.util.Random.nextDouble
 }
 
 class RectBound {
-  var xOffset: Double = -500
-  var yOffset: Double = -500
-  var width: Double = 1000
-  var height: Double = 1000
-  var strength: Double = 2
+  var xOffset: Double = -250
+  var yOffset: Double = -250
+  var width: Double = 500
+  var height: Double = 500
+
+  val padding = Constants.nodePadding * 0.5
 
   def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], alpha: Double) {
-    val k = alpha * strength
+    val strength = alpha * 2
     var i = 0
     while (i < n) {
       val node = nodes(i)
-      val xRadius = node.radius //node.size.x / 2
-      val yRadius = node.radius //node.size.y / 2
+      val xRadius = node.radius + padding //node.size.x / 2
+      val yRadius = node.radius + padding //node.size.y / 2
       val xPos = pos(2 * i) - xOffset
       val yPos = pos(2 * i + 1) - yOffset
       if (xPos < xRadius) {
-        // pos(2 * i) = xRadius + xOffset
-        vel(2 * i) = vel(2 * i) + (xRadius - xPos) * k
-        // vel(2 * i) =  0
+        vel(2 * i) += (xRadius - xPos) * strength
       }
       if (yPos < yRadius) {
-        // pos(2 * i + 1) = yRadius + yOffset
-        vel(2 * i + 1) = vel(2 * i + 1) + (yRadius - yPos) * k
-        // vel(2 * i + 1) = 0
+        vel(2 * i + 1) += (yRadius - yPos) * strength
       }
       if (xPos > width - xRadius) {
-        // pos(2 * i) = width - xRadius + xOffset
-        vel(2 * i) = vel(2 * i) + ((width - xRadius) - xPos) * k
-        // vel(2 * i) = 0
+        vel(2 * i) += ((width - xRadius) - xPos) * strength
       }
       if (yPos > height - yRadius) {
-        // pos(2 * i + 1) = height - yRadius + yOffset
-        vel(2 * i + 1) = vel(2 * i + 1) + ((height - yRadius) - yPos) * k
-        // vel(2 * i + 1) = 0
+        vel(2 * i + 1) += ((height - yRadius) - yPos) * strength
       }
       i += 1
     }
@@ -91,7 +105,7 @@ class RectBound {
 class KeepDistance {
   import ForceUtil._
 
-  val minVisibleDistance = 150
+  val minVisibleDistance = Constants.nodePadding
 
   def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, alpha: Double) {
     var ai = 0
@@ -113,10 +127,9 @@ class KeepDistance {
           if (visibleDist < minVisibleDistance) {
             val dirx = (bx - ax) / centerDist
             val diry = (by - ay) / centerDist
-            val strength = (1 - visibleDist / minVisibleDistance) * nodes(ai).radius
+            val strength = (minVisibleDistance - visibleDist) * 0.5 // the other half goes to the other node
             val pushx = dirx * strength * alpha
             val pushy = diry * strength * alpha
-            // println(s"dist: $visibleDist, strength: $strength, push: ${push.length}")
 
             vel(bi * 2) += pushx
             vel(bi * 2 + 1) += pushy
@@ -133,18 +146,23 @@ class KeepDistance {
 class PushOutOfWrongCluster {
   import ForceUtil._
 
-  val minVisibleDistance = 150
+  val minVisibleDistance = Constants.nodePadding
 
-  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, clusters: IndexedSeq[ContainmentCluster], alpha: Double) {
+  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], postIdToIndex: collection.Map[PostId, Int], maxRadius: Double, clusters: IndexedSeq[ContainmentCluster], alpha: Double) {
     var ci = 0
     val cn = clusters.size
-    var ai = 0
     while (ci < cn) {
       val cluster = clusters(ci)
       val hull = ConvexPolygon(cluster.convexHull.map(p => Vec2(p._1, p._2)))
+      val boundingBox = hull.aabb
+      val voronoiBoundingBox = boundingBox.copy(size = boundingBox.size + 2 * maxRadius + 2 * minVisibleDistance)
+      val wh = voronoiBoundingBox.size.width * 0.5
+      val hh = voronoiBoundingBox.size.height * 0.5
+      val postCount = cluster.posts.size
+      val clusterWeight = -1.0 / 3.0
+      val nodeWeight = 1.0 / 3.0
 
-      ai = 0
-      while (ai < n) {
+      forAllPointsInRect(quadtree, voronoiBoundingBox.center.x - wh, voronoiBoundingBox.center.y - hh, voronoiBoundingBox.center.x + wh, voronoiBoundingBox.center.y + hh) { ai =>
         val center = Vec2(pos(2 * ai), pos(2 * ai + 1))
         val radius = nodes(ai).radius + minVisibleDistance
 
@@ -171,18 +189,58 @@ class PushOutOfWrongCluster {
               }
             }
 
-            val pushDir = dir * strength * alpha
+            val nodePushDir = dir * strength * alpha
 
-            // push out
-            vel(ai * 2) += pushDir.x
-            vel(ai * 2 + 1) += pushDir.y
+            // push node out
+            vel(ai * 2) += nodePushDir.x * nodeWeight
+            vel(ai * 2 + 1) += nodePushDir.y * nodeWeight
+
+            val clusterPushX = nodePushDir.x * clusterWeight
+            val clusterPushY = nodePushDir.y * clusterWeight
+
+            // push nodes of cluster forming line segment back
+            cluster.posts.sortBy(p => (p.pos.get - center).lengthSq).take(2).foreach { post =>
+              val i = postIdToIndex(post.id)
+              vel(i * 2) += clusterPushX
+              vel(i * 2 + 1) += clusterPushY
+            }
           }
         }
-
-        ai += 1
       }
 
       ci += 1
+    }
+  }
+}
+
+class ClusterCollision {
+  import ForceUtil._
+
+  val minVisibleDistance = Constants.nodePadding
+
+  def force(n: Int, nodes: js.Array[SimPost], pos: IndexedSeq[Double], vel: js.Array[Double], quadtree: Quadtree[Int], maxRadius: Double, postIdToIndex: collection.Map[PostId, Int], nonIntersectingClusterPairs: IndexedSeq[(ContainmentCluster, ContainmentCluster)], alpha: Double) {
+    //TODO: speed up with quadtree
+    for {
+      (a, b) <- nonIntersectingClusterPairs
+      pa = ConvexPolygon(a.convexHull.map(p => Vec2(p._1, p._2)))
+      pb = ConvexPolygon(b.convexHull.map(p => Vec2(p._1, p._2)))
+      pushVector <- pa intersects pb //TODO: minVisibleDistanceGap between polygons
+    } {
+      val postCount = a.posts.size + b.posts.size
+      val aWeight = -b.posts.size / postCount.toDouble / a.posts.size
+      val bWeight = a.posts.size / postCount.toDouble / b.posts.size
+
+      a.posts.foreach { post =>
+        val i = postIdToIndex(post.id)
+        vel(i * 2) += pushVector.x * aWeight * alpha
+        vel(i * 2 + 1) += pushVector.y * aWeight * alpha
+      }
+
+      b.posts.foreach { post =>
+        val i = postIdToIndex(post.id)
+        vel(i * 2) += pushVector.x * bWeight * alpha
+        vel(i * 2 + 1) += pushVector.y * bWeight * alpha
+      }
     }
   }
 }
@@ -197,10 +255,16 @@ class MetaForce extends CustomForce[SimPost] {
   var indices: js.Array[Int] = js.Array()
   var quadtree: Quadtree[Int] = d3.quadtree()
 
+  val postIdToIndex = mutable.HashMap.empty[PostId, Int]
+
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
+  var nonIntersectingClusterPairs: js.Array[(ContainmentCluster, ContainmentCluster)] = js.Array()
 
   override def initialize(nodes: js.Array[SimPost]) {
     this.nodes = nodes
+    postIdToIndex.clear()
+    postIdToIndex ++= nodes.map(_.id).zipWithIndex
+
     if (nodes.size != n) {
       n = nodes.size
       pos = new js.Array(n * 2)
@@ -211,11 +275,16 @@ class MetaForce extends CustomForce[SimPost] {
 
   def setContainmentClusters(clusters: js.Array[ContainmentCluster]) {
     containmentClusters = clusters
+    nonIntersectingClusterPairs = clusters.toSeq.combinations(2).collect {
+      case Seq(a, b) if (a.posts intersect b.posts).isEmpty =>
+        (a, b)
+    }.toJSArray
   }
 
   val rectBound = new RectBound
   val keepDistance = new KeepDistance
   val pushOutOfWrongCluster = new PushOutOfWrongCluster
+  val clusterCollision = new ClusterCollision
 
   override def force(alpha: Double) {
     var maxRadius = 0.0
@@ -239,7 +308,8 @@ class MetaForce extends CustomForce[SimPost] {
     // apply forces
     rectBound.force(n, nodes, pos, vel, alpha)
     keepDistance.force(n, nodes, pos, vel, quadtree, maxRadius, alpha)
-    pushOutOfWrongCluster.force(n, nodes, pos, vel, quadtree, maxRadius, containmentClusters, alpha)
+    pushOutOfWrongCluster.force(n, nodes, pos, vel, quadtree, postIdToIndex, maxRadius, containmentClusters, alpha)
+    clusterCollision.force(n, nodes, pos, vel, quadtree, maxRadius, postIdToIndex, nonIntersectingClusterPairs, alpha)
 
     //write pos + vel to simpost
     i = 0
@@ -258,8 +328,8 @@ class MetaForce extends CustomForce[SimPost] {
 class Forces {
   val gravityX = d3.forceX[SimPost]()
   val gravityY = d3.forceY[SimPost]()
-  val repel = d3.forceManyBody[SimPost]()
-  val collision = d3.forceCollide[SimPost]() //TODO: rectangle collision detection?
+  // val repel = d3.forceManyBody[SimPost]()
+  // val collision = d3.forceCollide[SimPost]() //TODO: rectangle collision detection?
   // val distance = d3.forceCollide[SimPost]()
   val connection = d3.forceLink[SimPost, SimConnection]()
   val redirectedConnection = d3.forceLink[SimPost, SimRedirectedConnection]()
@@ -273,28 +343,28 @@ object Forces {
   def apply() = {
     val forces = new Forces
 
-    forces.repel.strength((p: SimPost) => -p.radius * 5)
-    forces.repel.distanceMax(1000)
+    // forces.repel.strength((p: SimPost) => -p.radius * 5)
+    // forces.repel.distanceMax(1000)
     // forces.repel.theta(0.0) // 0 disables approximation
 
-    forces.collision.radius((p: SimPost) => p.radius)
+    // forces.collision.radius((p: SimPost) => p.radius)
     // forces.collision.strength(0.9)
 
     // forces.distance.radius((p: SimPost) => p.radius + 600)
     // forces.distance.strength(0.01)
 
-    forces.connection.distance((c: SimConnection) => c.source.radius + 150 + c.target.radius)
-    // forces.connection.strength(0.3)
-    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + 150 + c.target.radius)
-    // forces.redirectedConnection.strength(0.2)
+    forces.connection.distance((c: SimConnection) => c.source.radius + Constants.nodePadding + c.target.radius)
+    forces.connection.strength(0.3)
+    forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + Constants.nodePadding + c.target.radius)
+    forces.redirectedConnection.strength(0.3)
 
-    forces.containment.distance((c: SimContainment) => c.parent.radius + 150 + c.child.radius)
-    forces.containment.strength(0.2)
-    // forces.collapsedContainment.distance(400)
-    // forces.collapsedContainment.strength(0.05)
+    forces.containment.distance((c: SimContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
+    forces.containment.strength(0.05)
+    forces.collapsedContainment.distance((c: SimCollapsedContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
+    forces.collapsedContainment.strength(0.01)
 
-    forces.gravityX.strength(0.01)
-    forces.gravityY.strength(0.01)
+    forces.gravityX.strength(0.001)
+    forces.gravityY.strength(0.001)
 
     forces
   }
@@ -303,9 +373,8 @@ object Forces {
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
     .alphaMin(0.001) // stop simulation earlier (default = 0.001)
-    // .alphaTarget(1)
-    // .force("gravityx", forces.gravityX)
-    // .force("gravityy", forces.gravityY)
+    .force("gravityx", forces.gravityX)
+    .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)

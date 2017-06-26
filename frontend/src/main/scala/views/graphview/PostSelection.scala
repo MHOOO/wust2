@@ -14,7 +14,7 @@ class PostRadiusSelection(graphState: GraphState, d3State: D3State) extends Data
   override val tag = "circle"
   override def update(post: Selection[SimPost]) {
     post
-      .attr("stroke", "#888")
+      .attr("stroke", "#444")
       .attr("fill", "transparent")
   }
 
@@ -25,7 +25,23 @@ class PostRadiusSelection(graphState: GraphState, d3State: D3State) extends Data
   }
 }
 
-class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag) extends DataSelection[SimPost] {
+class PostPaddingRadiusSelection(graphState: GraphState, d3State: D3State) extends DataSelection[SimPost] {
+  override val tag = "circle"
+  override def update(post: Selection[SimPost]) {
+    post
+      .attr("stroke", "#666")
+      .attr("fill", "transparent")
+      .attr("stroke-dasharray", "10,10")
+  }
+
+  override def draw(post: Selection[SimPost]) {
+    post
+      .style("transform", (p: SimPost) => s"translate(${p.x.get}px,${p.y.get}px)")
+      .attr("r", (p: SimPost) => p.radius + Constants.nodePadding / 2)
+  }
+}
+
+class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag, updatedNodeSizes: () => Any) extends DataSelection[SimPost] {
   import graphState.rxFocusedSimPost
   import postDrag._
 
@@ -74,6 +90,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
     post.each({ (node: HTMLElement, p: SimPost) =>
       p.recalculateSize(node, d3State.transform.k)
     })
+    updatedNodeSizes()
   }
 
   private var draw = 0
