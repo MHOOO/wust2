@@ -64,8 +64,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   val collapsedContainmentHullSelection = SelectData.rx(CollapsedContainmentHullSelection, rxCollapsedContainmentCluster)(svg.append("g"))
   val connectionLineSelection = SelectData.rx(ConnectionLineSelection, rxSimConnection)(svg.append("g"))
   val redirectedConnectionLineSelection = SelectData.rx(RedirectedConnectionLineSelection, rxSimRedirectedConnection)(svg.append("g"))
-  // val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
-  // val postPaddingRadiusSelection = SelectData.rx(new PostPaddingRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
+  val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
+  val postPaddingRadiusSelection = SelectData.rx(new PostPaddingRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
 
   val html = container.append("div")
   val connectionElementSelection = SelectData.rx(new ConnectionElementSelection(graphState), rxSimConnection)(html.append("div"))
@@ -99,6 +99,10 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
           simPost.fixedPos = js.undefined
         }
         d3State.simulation.tick()
+        draw()
+      }), br(),
+      button("stop", onclick := { () =>
+        d3State.simulation.stop()
         draw()
       }), br(),
       button("draw", onclick := { () =>
@@ -224,6 +228,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   }
 
   private def onPostDragEnd() {
+    rxContainmentCluster.now.foreach{ _.recalculateConvexHull() }
     draw()
   }
 
@@ -238,10 +243,12 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         val pos = d3State.transform.invert(d3.mouse(svg.node))
         state.postCreatorMenus() = List(PostCreatorMenu(Vec2(pos(0), pos(1))))
       } else {
-        Var.set(
-          VarTuple(state.postCreatorMenus, Nil),
-          VarTuple(focusedPostId, None)
-        )
+        // Var.set(
+        //   VarTuple(state.postCreatorMenus, Nil),
+        //   VarTuple(focusedPostId, None)
+        // )
+        state.postCreatorMenus() = Nil
+        focusedPostId() = None
       }
     })
 
@@ -288,8 +295,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     // lastDraw = now
 
     postSelection.draw()
-    // postRadiusSelection.draw()
-    // postPaddingRadiusSelection.draw()
+    postRadiusSelection.draw()
+    postPaddingRadiusSelection.draw()
     // postMenuSelection.draw()
     connectionLineSelection.draw()
     redirectedConnectionLineSelection.draw()

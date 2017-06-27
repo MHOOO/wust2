@@ -55,19 +55,23 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       //TODO: Doubleclick -> Focus
       .on("click", { (p: SimPost) =>
         DevPrintln(s"\nClicked Post: ${p.id} ${p.title}")
-        Var.set(
-          VarTuple(rxFocusedSimPost, rxFocusedSimPost.now.map(_.id).setOrToggle(p.id)),
-          VarTuple(graphState.state.postCreatorMenus, Nil)
-        )
+        // Var.set(
+        //   VarTuple(rxFocusedSimPost, rxFocusedSimPost.now.map(_.id).setOrToggle(p.id)),
+        //   VarTuple(graphState.state.postCreatorMenus, Nil)
+        // )
+        rxFocusedSimPost() = rxFocusedSimPost.now.map(_.id).setOrToggle(p.id)
+        graphState.state.postCreatorMenus() = Nil
       })
       .call(d3.drag[SimPost]()
         .clickDistance(10) // interpret short drags as clicks
         //TODO: click should not trigger drag
         .on("start", { (simPost: SimPost) =>
-          Var.set(
-            VarTuple(graphState.state.focusedPostId, None),
-            VarTuple(graphState.state.postCreatorMenus, Nil)
-          )
+          // Var.set(
+          //   VarTuple(graphState.state.focusedPostId, None),
+          //   VarTuple(graphState.state.postCreatorMenus, Nil)
+          // )
+          graphState.state.focusedPostId() = None
+          graphState.state.postCreatorMenus() = Nil
           postDragStarted(simPost)
         })
         .on("drag", postDragged _)

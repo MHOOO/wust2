@@ -11,32 +11,39 @@ import vectory._
 class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost], val depth: Int) {
   val id = parent.id
   val posts: IndexedSeq[SimPost] = children :+ parent
+
   val postCount = posts.size
-  val sn = 16
-  val step = PI * 2.0 / sn
-  val positionSamples = new js.Array[js.Tuple2[Double, Double]](sn * posts.size)
-  def regenerateCircleSamples() {
+  private val sn = 16
+  private val step = PI * 2.0 / sn
+  private val positionSamples = new js.Array[js.Tuple2[Double, Double]](sn * posts.size)
+  private val padding = 0 // 15
+  private def regenerateCircleSamples() {
     var i = 0
     val n = postCount * sn
     while (i < n) {
       val a = (i % sn) * step
       val post = posts(i / sn)
-      val radius = post.radius + 15
+      val radius = post.radius + padding
       positionSamples(i) = js.Tuple2(
-        cos(a) * radius + post.x.get,
-        sin(a) * radius + post.y.get
+        cos(a) * radius + post.x.getOrElse(0.0),
+        sin(a) * radius + post.y.getOrElse(0.0)
       )
       i += 1
     }
   }
 
-  def positions: js.Array[js.Tuple2[Double, Double]] = { regenerateCircleSamples(); positionSamples }
-  def convexHull: js.Array[js.Tuple2[Double, Double]] = {
-    val hull = d3.polygonHull(positions)
-    //TODO: how to correctly handle scalajs union type?
-    if (hull == null) positions
-    else hull.asInstanceOf[js.Array[js.Tuple2[Double, Double]]]
+  private var _convexHull: js.Array[js.Tuple2[Double, Double]] = null
+  def convexHull = _convexHull
+  def recalculateConvexHull() {
+    regenerateCircleSamples()
+    val hull = d3.polygonHull(positionSamples)
+    _convexHull = if (hull == null)
+      positionSamples
+    else
+      hull.asInstanceOf[js.Array[js.Tuple2[Double, Double]]]
   }
+
+  recalculateConvexHull()
 }
 
 object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
