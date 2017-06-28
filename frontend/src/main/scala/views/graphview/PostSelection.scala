@@ -87,7 +87,6 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
       .text((p: SimPost) => p.title)
 
     recalculateNodeSizes(post)
-    post
   }
 
   private def recalculateNodeSizes(post: Selection[SimPost]) {

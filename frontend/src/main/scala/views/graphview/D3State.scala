@@ -173,12 +173,9 @@ class PushOutOfWrongCluster {
         val center = Vec2(pos(ai2), pos(ai2 + 1))
         val radius = nodes(ai).radius + minVisibleDistance
 
-        val belongsToCluster = containmentClusterPostIndices(ci)(ai)
+        val belongsToCluster = containmentClusterPostIndices(ci).contains(ai)
         if (!belongsToCluster) {
           val visuallyInCluster = hull intersects Circle(center, radius)
-          println(s"visuallyInCluster: $visuallyInCluster")
-          println(hull)
-          println(Circle(center, radius))
           if (visuallyInCluster) {
             val closestEdge = hull.edges.minBy(_.segmentDistance(center)) //TODO: stop earlier if under threshold
             val pointOnLine = closestEdge pointProjection center
@@ -202,19 +199,19 @@ class PushOutOfWrongCluster {
             val nodePushDir = dir * strength * alpha
 
             // push node out
-            vel(ai2) += nodePushDir.x * nodeWeight
-            vel(ai2 + 1) += nodePushDir.y * nodeWeight
+            vel(ai2) += nodePushDir.x // * nodeWeight
+            vel(ai2 + 1) += nodePushDir.y // * nodeWeight
 
-            val clusterPushX = nodePushDir.x * clusterWeight
-            val clusterPushY = nodePushDir.y * clusterWeight
+            // val clusterPushX = nodePushDir.x * clusterWeight
+            // val clusterPushY = nodePushDir.y * clusterWeight
 
             // push nodes of cluster forming line segment back
-            containmentClusterPostIndices(ci).toSeq.sortBy(i => (pos(i * 2) - center.x) * (pos(i * 2) - center.x) + (pos(i * 2 + 1) - center.y) * (pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
-              // cluster.posts.sortBy(p => (p.pos.get - center).lengthSq).take(2).foreach { post =>
-              // val i = postIdToIndex(post.id)
-              vel(i * 2) += clusterPushX
-              vel(i * 2 + 1) += clusterPushY
-            }
+            // containmentClusterPostIndices(ci).toSeq.sortBy(i => (pos(i * 2) - center.x) * (pos(i * 2) - center.x) + (pos(i * 2 + 1) - center.y) * (pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
+            //   // cluster.posts.sortBy(p => (p.pos.get - center).lengthSq).take(2).foreach { post =>
+            //   // val i = postIdToIndex(post.id)
+            //   vel(i * 2) += clusterPushX
+            //   vel(i * 2 + 1) += clusterPushY
+            // }
           }
         }
       }
@@ -227,8 +224,7 @@ class PushOutOfWrongCluster {
 class ClusterCollision {
   import ForceUtil._
 
-  val minVisibleDistance = Constants.nodePadding
-
+  // the minimum distance is already preserved by the pushOutOfWrongCluster-Force
   def force(data: MetaForce, alpha: Double) {
     import data._
     //TODO: speed up with quadtree
@@ -275,7 +271,7 @@ class MetaForce extends CustomForce[SimPost] {
   var maxRadius = 0.0
 
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
-  var containmentClusterPostIndices: js.Array[Set[Int]] = js.Array()
+  var containmentClusterPostIndices: js.Array[js.Array[Int]] = js.Array()
   var containmentClusterPolygons: js.Array[ConvexPolygon] = js.Array()
   var clusterCount: Int = 0
   var nonIntersectingClusterPairs: js.Array[js.Tuple2[Int, Int]] = js.Array()
@@ -304,7 +300,7 @@ class MetaForce extends CustomForce[SimPost] {
       case Seq((a, ai), (b, bi)) if (a.posts intersect b.posts).isEmpty =>
         js.Tuple2(ai, bi)
     }.toJSArray
-    containmentClusterPostIndices = clusters.map(_.posts.map(p => postIdToIndex(p.id))(breakOut): Set[Int])
+    containmentClusterPostIndices = clusters.map(_.posts.map(p => postIdToIndex(p.id))(breakOut): js.Array[Int])
   }
 
   val rectBound = new RectBound
@@ -402,7 +398,7 @@ object Forces {
     forces.redirectedConnection.strength(0.3)
 
     forces.containment.distance((c: SimContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
-    forces.containment.strength(0.05)
+    forces.containment.strength(0.5)
     forces.collapsedContainment.distance((c: SimCollapsedContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
     forces.collapsedContainment.strength(0.01)
 
@@ -415,16 +411,17 @@ object Forces {
 
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
-    .alphaMin(0.001) // stop simulation earlier (default = 0.001)
+    .alphaMin(0.01) // stop simulation earlier (default = 0.001)
+    .velocityDecay(0.9)
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
     .force("meta", forces.meta)
-  // .force("connection", forces.connection)
-  // .force("redirectedConnection", forces.redirectedConnection)
-  // .force("containment", forces.containment)
+    .force("connection", forces.connection)
+    // .force("redirectedConnection", forces.redirectedConnection)
+    .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
 }
 

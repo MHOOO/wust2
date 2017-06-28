@@ -13,7 +13,7 @@ class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost],
   val posts: IndexedSeq[SimPost] = children :+ parent
 
   val postCount = posts.size
-  private val sn = 16
+  private val sn = 16 //TODO: on low numbers this leads to NaNs
   private val step = PI * 2.0 / sn
   private val positionSamples = new js.Array[js.Tuple2[Double, Double]](sn * posts.size)
   private val padding = 0 // 15
@@ -60,8 +60,8 @@ object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
   // https://codeplea.com/introduction-to-splines
   // https://github.com/d3/d3-shape#curves
   // val curve = d3.curveCardinalClosed
-  val curve = d3.curveCatmullRomClosed.alpha(0.5)
-  // val curve = d3.curveLinearClosed
+  // val curve = d3.curveCatmullRomClosed.alpha(0.5)
+  val curve = d3.curveLinearClosed
   // val curve = d3.curveNatural
 
   override def draw(hull: Selection[ContainmentCluster]) {
