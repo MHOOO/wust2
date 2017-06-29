@@ -132,12 +132,10 @@ class KeepDistance {
           if (visibleDist < minVisibleDistance) {
             val dirx = (bx - ax) / centerDist
             val diry = (by - ay) / centerDist
-            val strength = (minVisibleDistance - visibleDist) * 0.5 // the other half goes to the other node
-            val pushx = dirx * strength * alpha
-            val pushy = diry * strength * alpha
+            val strength = (minVisibleDistance - visibleDist) * 0.5 * alpha // the other half goes to the other node
 
-            vel(bi2) += pushx
-            vel(bi2 + 1) += pushy
+            vel(bi2) += dirx * strength
+            vel(bi2 + 1) += diry * strength
           }
           // }
         }
@@ -150,7 +148,7 @@ class KeepDistance {
 
 class PushOutOfWrongCluster {
   import ForceUtil._
-
+  // pushes a wrong vertex and the closest 2 vertices of the cluster away from each other
   val minVisibleDistance = Constants.nodePadding
 
   def force(data: MetaForce, alpha: Double) {
@@ -164,9 +162,8 @@ class PushOutOfWrongCluster {
       val voronoiBoundingBox = boundingBox.copy(size = boundingBox.size + 2 * maxRadius + 2 * minVisibleDistance)
       val wh = voronoiBoundingBox.size.width * 0.5
       val hh = voronoiBoundingBox.size.height * 0.5
-      val postCount = cluster.posts.size
-      val clusterWeight = -1.0 / 3.0
-      val nodeWeight = 1.0 / 3.0
+      val postCount = 2 //cluster.posts.size
+      val forceWeight = 1.0 / (postCount + 1) // per node
 
       forAllPointsInRect(quadtree, voronoiBoundingBox.center.x - wh, voronoiBoundingBox.center.y - hh, voronoiBoundingBox.center.x + wh, voronoiBoundingBox.center.y + hh) { ai2 =>
         val ai = ai2 / 2
@@ -175,43 +172,20 @@ class PushOutOfWrongCluster {
 
         val belongsToCluster = containmentClusterPostIndices(ci).contains(ai)
         if (!belongsToCluster) {
-          val visuallyInCluster = hull intersects Circle(center, radius)
-          if (visuallyInCluster) {
-            val closestEdge = hull.edges.minBy(_.segmentDistance(center)) //TODO: stop earlier if under threshold
-            val pointOnLine = closestEdge pointProjection center
-
-            val dir = {
-              if (closestEdge leftOf center) { // circle center outside
-                (center - pointOnLine).normalized
-              } else { // circle center inside
-                (pointOnLine - center).normalized
-              }
-            }
-
-            val strength = {
-              if (closestEdge leftOf center) { // circle center outside
-                (1 - (center - pointOnLine).length / radius) * nodes(ai).radius
-              } else { // circle center inside
-                nodes(ai).radius
-              }
-            }
-
-            val nodePushDir = dir * strength * alpha
+          val visuallyInCluster = hull intersectsMtd Circle(center, radius)
+          visuallyInCluster.foreach { pushVector =>
+            val nodePushDir = pushVector * (alpha * forceWeight)
 
             // push node out
-            vel(ai2) += nodePushDir.x // * nodeWeight
-            vel(ai2 + 1) += nodePushDir.y // * nodeWeight
+            vel(ai2) += nodePushDir.x
+            vel(ai2 + 1) += nodePushDir.y
 
-            // val clusterPushX = nodePushDir.x * clusterWeight
-            // val clusterPushY = nodePushDir.y * clusterWeight
-
-            // push nodes of cluster forming line segment back
-            // containmentClusterPostIndices(ci).toSeq.sortBy(i => (pos(i * 2) - center.x) * (pos(i * 2) - center.x) + (pos(i * 2 + 1) - center.y) * (pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
-            //   // cluster.posts.sortBy(p => (p.pos.get - center).lengthSq).take(2).foreach { post =>
-            //   // val i = postIdToIndex(post.id)
-            //   vel(i * 2) += clusterPushX
-            //   vel(i * 2 + 1) += clusterPushY
-            // }
+            // push closest nodes of cluster (forming line segment) back
+            containmentClusterPostIndices(ci).toSeq.sortBy(i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
+              val i2 = i * 2
+              vel(i2) += -nodePushDir.x
+              vel(i2 + 1) += -nodePushDir.y
+            }
           }
         }
       }
@@ -224,32 +198,30 @@ class PushOutOfWrongCluster {
 class ClusterCollision {
   import ForceUtil._
 
-  // the minimum distance is already preserved by the pushOutOfWrongCluster-Force
+  // the minimum distance between clusters is already preserved by the pushOutOfWrongCluster-Force
   def force(data: MetaForce, alpha: Double) {
     import data._
-    //TODO: speed up with quadtree
+    //TODO: speed up with quadtree?
     for {
       js.Tuple2(ai, bi) <- nonIntersectingClusterPairs
       pa = containmentClusterPolygons(ai)
       pb = containmentClusterPolygons(bi)
-      pushVector <- pa intersectsMtd pb //TODO: minVisibleDistanceGap between polygons
-      a = containmentClusters(ai)
-      b = containmentClusters(bi)
+      pushVector <- pa intersectsMtd pb
     } {
-      val postCount = a.posts.size + b.posts.size
-      val aWeight = -b.posts.size / postCount.toDouble / a.posts.size
-      val bWeight = a.posts.size / postCount.toDouble / b.posts.size
-      val aStrength = aWeight * alpha
-      val bStrength = bWeight * alpha
+      // No weight distributed over nodes, since we want to move the whole cluster with the full speed
+      val aPush = -pushVector * alpha
+      val bPush = pushVector * alpha
 
       containmentClusterPostIndices(ai).foreach { i =>
-        vel(i * 2) += pushVector.x * aStrength
-        vel(i * 2 + 1) += pushVector.y * aStrength
+        val i2 = i * 2
+        vel(i2) += aPush.x
+        vel(i2 + 1) += aPush.y
       }
 
       containmentClusterPostIndices(bi).foreach { i =>
-        vel(i * 2) += pushVector.x * bStrength
-        vel(i * 2 + 1) += pushVector.y * bStrength
+        val i2 = i * 2
+        vel(i2) += bPush.x
+        vel(i2 + 1) += bPush.y
       }
     }
   }
@@ -343,7 +315,7 @@ class MetaForce extends CustomForce[SimPost] {
       time("rectBound"){ rectBound.force(this, alpha) }
       time("keepDistance"){ keepDistance.force(this, alpha) }
       time("pushOutOfWrongCluster"){ pushOutOfWrongCluster.force(this, alpha) }
-      // time("clusterCollision"){ clusterCollision.force(this, alpha) }
+      time("clusterCollision"){ clusterCollision.force(this, alpha) }
 
       time("force.apply") {
         //write pos + vel to simpost
@@ -419,9 +391,9 @@ object Simulation {
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
     .force("meta", forces.meta)
-    .force("connection", forces.connection)
-    // .force("redirectedConnection", forces.redirectedConnection)
-    .force("containment", forces.containment)
+  // .force("connection", forces.connection)
+  // .force("redirectedConnection", forces.redirectedConnection)
+  // .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
 }
 
