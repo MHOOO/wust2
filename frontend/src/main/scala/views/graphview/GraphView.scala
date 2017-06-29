@@ -221,6 +221,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.redirectedConnection.initialize(rxSimPosts.now)
     d3State.forces.containment.initialize(rxSimPosts.now)
     d3State.forces.collapsedContainment.initialize(rxSimPosts.now)
+    d3State.forces.meta.updatedNodeSizes()
   }
 
   private def onPostDrag() {

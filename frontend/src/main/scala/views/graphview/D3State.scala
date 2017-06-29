@@ -227,6 +227,47 @@ class ClusterCollision {
   }
 }
 
+class Clustering {
+  import ForceUtil._
+  def force(data: MetaForce, alpha: Double) {
+    import data._
+    var ci = 0
+    val cn = containmentClusters.size
+    var i = 0
+    var i2 = 0
+    while (ci < cn) {
+      val parentI2 = containmentClusterParentIndex(ci) * 2
+      val children = containmentClusterChildrenIndices(ci)
+      val targetDistance = containmentClusterMaxRadius(ci)
+      val targetDistanceSq = targetDistance * targetDistance
+      val maxVelocity = targetDistance
+
+      val n = children.size
+      i = 0
+      while (i < n) {
+        val i2 = children(i) * 2
+        val dx = pos(parentI2) - pos(i2)
+        val dy = pos(parentI2 + 1) - pos(i2 + 1)
+        val distanceSq = Vec2.lengthSq(dx, dy)
+        if (distanceSq > targetDistanceSq) {
+          //TODO: avoid Vec2 allocation and sqrt
+          val distanceDiff = Vec2.length(dx, dy) - targetDistance
+          val velocity = (distanceDiff * 0.5) // min maxVelocity
+          val childDir = Vec2(dx, dy).normalized * (velocity * alpha)
+          val parentDir = -childDir
+
+          vel(i2) += childDir.x
+          vel(i2 + 1) += childDir.y
+          vel(parentI2) += parentDir.x
+          vel(parentI2 + 1) += parentDir.y
+        }
+        i += 1
+      }
+      ci += 1
+    }
+  }
+}
+
 @ScalaJSDefined
 class MetaForce extends CustomForce[SimPost] {
   var n: Int = 0
@@ -236,6 +277,7 @@ class MetaForce extends CustomForce[SimPost] {
   var nodes = js.Array[SimPost]()
   var pos: js.Array[Double] = js.Array()
   var vel: js.Array[Double] = js.Array()
+  //TODO: var radii
   var indices: js.Array[Int] = js.Array()
   var quadtree: Quadtree[Int] = d3.quadtree()
 
@@ -243,6 +285,9 @@ class MetaForce extends CustomForce[SimPost] {
   var maxRadius = 0.0
 
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
+  var containmentClusterMaxRadius: js.Array[Double] = js.Array()
+  var containmentClusterParentIndex: js.Array[Int] = js.Array()
+  var containmentClusterChildrenIndices: js.Array[js.Array[Int]] = js.Array()
   var containmentClusterPostIndices: js.Array[js.Array[Int]] = js.Array()
   var containmentClusterPolygons: js.Array[ConvexPolygon] = js.Array()
   var clusterCount: Int = 0
@@ -262,6 +307,7 @@ class MetaForce extends CustomForce[SimPost] {
         indices = (0 until n2 by 2).toJSArray
       }
     }
+    updatedNodeSizes() //TODO: is this triggered twice?
   }
 
   def setContainmentClusters(clusters: js.Array[ContainmentCluster]) {
@@ -272,11 +318,30 @@ class MetaForce extends CustomForce[SimPost] {
       case Seq((a, ai), (b, bi)) if (a.posts intersect b.posts).isEmpty =>
         js.Tuple2(ai, bi)
     }.toJSArray
+
+    containmentClusterParentIndex = clusters.map(c => postIdToIndex(c.parent.id))
+    containmentClusterChildrenIndices = clusters.map(_.children.map(p => postIdToIndex(p.id))(breakOut): js.Array[Int])
     containmentClusterPostIndices = clusters.map(_.posts.map(p => postIdToIndex(p.id))(breakOut): js.Array[Int])
+
+    updatedNodeSizes()
+  }
+
+  def updatedNodeSizes() {
+    containmentClusterMaxRadius = containmentClusters.map{ c =>
+      val area = c.posts.map{ p =>
+        val radius = p.radius + Constants.nodePadding
+        val radiusOfBoundingCircleOfBoundingSquare = radius * Math.sqrt(2)
+        2 * Math.PI * radiusOfBoundingCircleOfBoundingSquare * radiusOfBoundingCircleOfBoundingSquare
+      }.sum
+      val radius = Math.sqrt(area / (2 * Math.PI))
+      val boundingRadius = radius * Math.sqrt(2) // radius of bounding circle of bounding square
+      boundingRadius
+    }
   }
 
   val rectBound = new RectBound
   val keepDistance = new KeepDistance
+  val clustering = new Clustering
   val pushOutOfWrongCluster = new PushOutOfWrongCluster
   val clusterCollision = new ClusterCollision
 
@@ -314,6 +379,7 @@ class MetaForce extends CustomForce[SimPost] {
       // apply forces
       time("rectBound"){ rectBound.force(this, alpha) }
       time("keepDistance"){ keepDistance.force(this, alpha) }
+      time("clustering") { clustering.force(this, alpha) }
       time("pushOutOfWrongCluster"){ pushOutOfWrongCluster.force(this, alpha) }
       time("clusterCollision"){ clusterCollision.force(this, alpha) }
 
@@ -365,7 +431,7 @@ object Forces {
     // forces.distance.strength(0.01)
 
     forces.connection.distance((c: SimConnection) => c.source.radius + Constants.nodePadding + c.target.radius)
-    forces.connection.strength(0.3)
+    // forces.connection.strength(0.3)
     forces.redirectedConnection.distance((c: SimRedirectedConnection) => c.source.radius + Constants.nodePadding + c.target.radius)
     forces.redirectedConnection.strength(0.3)
 
@@ -374,8 +440,8 @@ object Forces {
     forces.collapsedContainment.distance((c: SimCollapsedContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
     forces.collapsedContainment.strength(0.01)
 
-    forces.gravityX.strength(0.001)
-    forces.gravityY.strength(0.001)
+    forces.gravityX.strength(0.01)
+    forces.gravityY.strength(0.01)
 
     forces
   }
@@ -384,9 +450,9 @@ object Forces {
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
     .alphaMin(0.01) // stop simulation earlier (default = 0.001)
-    .velocityDecay(0.9)
-    // .force("gravityx", forces.gravityX)
-    // .force("gravityy", forces.gravityY)
+    .velocityDecay(0.9) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
+    .force("gravityx", forces.gravityX)
+    .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
