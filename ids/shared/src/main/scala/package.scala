@@ -4,10 +4,11 @@ import boopickle.Default._
 import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
 import scalaz._
 import wust.ids._
+import java.util.UUID
 
 package object ids {
   type IdType = Long
-  type UuidType = String
+  type UuidType = UUID
 
   // unboxed types with scalaz: http://eed3si9n.com/learning-scalaz/Tagged+type.html
   sealed trait PostIdType
@@ -26,8 +27,8 @@ package object ids {
   implicit def GroupIdPickler = transformPickler[GroupId, IdType](GroupId _)(Tag.unwrap _)
   implicit def UserIdPickler = transformPickler[UserId, IdType](UserId _)(Tag.unwrap _)
 
-  implicit val encodePostId: Encoder[PostId] = Encoder.encodeString.contramap[PostId](Tag.unwrap _)
-  implicit val decodePostId: Decoder[PostId] = Decoder.decodeString.map(PostId(_))
+  implicit val encodePostId: Encoder[PostId] = Encoder.encodeUUID.contramap[PostId](Tag.unwrap _)
+  implicit val decodePostId: Decoder[PostId] = Decoder.decodeUUID.map(PostId(_))
   implicit val encodeGroupId: Encoder[GroupId] = Encoder.encodeLong.contramap[GroupId](Tag.unwrap _)
   implicit val decodeGroupId: Decoder[GroupId] = Decoder.decodeLong.map(GroupId(_))
   implicit val encodeUserId: Encoder[UserId] = Encoder.encodeLong.contramap[UserId](Tag.unwrap _)

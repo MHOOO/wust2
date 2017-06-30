@@ -65,15 +65,7 @@ class Db(val ctx: PostgresAsyncContext[LowerCase]) {
     }
 
     def get(postIds: Set[PostId])(implicit ec: ExecutionContext): Future[List[Post]] = {
-      //TODO
-      //ctx.run(query[Post].filter(p => liftQuery(postIds) contains p.id))
-      val q = quote {
-        infix"""
-        select post.* from unnest(${lift(postIds.toList)} :: varchar(36)[]) inputPostId join post on post.id = inputPostId
-      """.as[Query[Post]]
-      }
-
-      ctx.run(q)
+      ctx.run(query[Post].filter(p => liftQuery(postIds) contains p.id))
     }
 
     def update(post: Post)(implicit ec: ExecutionContext): Future[Boolean] = update(Set(post))
@@ -104,13 +96,8 @@ class Db(val ctx: PostgresAsyncContext[LowerCase]) {
     }
 
     def getGroupIds(postIds: Set[PostId])(implicit ec: ExecutionContext): Future[Map[PostId, Set[GroupId]]] = {
-      val q = quote {
-        infix"""
-        select ownership.* from unnest(${lift(postIds.toList)} :: varchar(36)[]) inputPostId join ownership on ownership.postid = inputPostId
-      """.as[Query[Ownership]]
-      }
-
-      ctx.run(q).map(_.groupBy(_.postId).mapValues(_.map(_.groupId).toSet))
+      ctx.run(query[Ownership].filter(o => liftQuery(postIds) contains o.postId))
+        .map(_.groupBy(_.postId).mapValues(_.map(_.groupId).toSet))
     }
   }
 

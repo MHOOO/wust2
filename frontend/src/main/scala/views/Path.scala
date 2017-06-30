@@ -33,6 +33,13 @@ object Path {
 }
 
 object PathOption {
+  import java.util.UUID
+
+  object UuidList {
+    def parse(str: String): Seq[UUID] = str.split(",").flatMap(part => Try(UUID.fromString(part)).toOption)
+    def toString(seq: Seq[UUID]): String = seq.mkString(",")
+  }
+
   object IdList {
     def parse(str: String): Seq[Long] = str.split(",").flatMap(part => Try(part.toLong).toOption)
     def toString(seq: Seq[Long]): String = seq.mkString(",")
