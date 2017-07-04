@@ -68,6 +68,28 @@ object ForceUtil {
   }
 
   def jitter = scala.util.Random.nextDouble
+
+  @inline def min2By(list:js.Array[Int], f:Int => Int):(Int,Int) = {
+    val n = list.size
+    var i = 0
+    var min1Value = Int.MaxValue
+    var min2Value = Int.MaxValue
+    var min1 = Int.MaxValue
+    var min2 = Int.MaxValue
+    while(i < n) {
+      val x = list(i)
+      val value = f(x)
+      if( value < min1Value ) {
+        min2 = min1; min2Value = min1Value
+        min1 = x; min1Value = value
+      }
+      else if(value < min2Value) {
+        min2 = x; min2Value = value
+      }
+      i += 1
+    }
+    (min1,min2)
+  }
 }
 
 class RectBound {
@@ -181,6 +203,7 @@ class PushOutOfWrongCluster {
             vel(ai2 + 1) += nodePushDir.y
 
             // push closest nodes of cluster (forming line segment) back
+            min2By(containmentClusterPostIndices, 
             containmentClusterPostIndices(ci).toSeq.sortBy(i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
               val i2 = i * 2
               vel(i2) += -nodePushDir.x
@@ -268,6 +291,39 @@ class Clustering {
   }
 }
 
+class ConnectionDistance {
+  import ForceUtil._
+  def force(data: MetaForce, alpha: Double) {
+    import data._
+    var i2 = 0
+    val cn = connections.size
+    while(i2 < cn) {
+      //TODO: directly store i2 indices in connections?
+      val sourceI2 = connections(i2) * 2
+      val targetI2 = connections(i2+1) * 2
+      val targetDistance = nodes(sourceI2/2).radius + Constants.nodePadding + nodes(targetI2/2).radius
+      val targetDistanceSq = targetDistance * targetDistance // TODO: cache in array
+        val dx = pos(sourceI2) - pos(targetI2)
+        val dy = pos(sourceI2 + 1) - pos(targetI2 + 1)
+        val distanceSq = Vec2.lengthSq(dx, dy)
+        if (distanceSq > targetDistanceSq) {
+          //TODO: avoid Vec2 allocation and sqrt
+          val distanceDiff = Vec2.length(dx, dy) - targetDistance
+          val velocity = (distanceDiff * 0.5) // min maxVelocity
+          val targetDir = Vec2(dx, dy).normalized * (velocity * alpha)
+          val sourceDir = -targetDir
+
+          vel(sourceI2) += sourceDir.x
+          vel(sourceI2 + 1) += sourceDir.y
+          vel(targetI2) += targetDir.x
+          vel(targetI2 + 1) += targetDir.y
+        }
+      
+      i2 += 2
+    }
+  }
+}
+
 @ScalaJSDefined
 class MetaForce extends CustomForce[SimPost] {
   var n: Int = 0
@@ -283,6 +339,8 @@ class MetaForce extends CustomForce[SimPost] {
 
   val postIdToIndex = mutable.HashMap.empty[PostId, Int]
   var maxRadius = 0.0
+
+  var connections: js.Array[Int] = js.Array()
 
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
   var containmentClusterMaxRadius: js.Array[Double] = js.Array()
@@ -310,7 +368,21 @@ class MetaForce extends CustomForce[SimPost] {
     updatedNodeSizes() //TODO: is this triggered twice?
   }
 
+  def setConnections(connections: js.Array[SimConnection]) {
+    time("setConnections") {
+    val m = connections.size
+    this.connections = new js.Array(m*2)
+    var i = 0
+    while(i < m) {
+      this.connections(i*2) = postIdToIndex(connections(i).source.id)
+      this.connections(i*2+1) = postIdToIndex(connections(i).target.id)  
+      i += 1
+    }
+    }
+  }
+
   def setContainmentClusters(clusters: js.Array[ContainmentCluster]) {
+    time("setContainmentClusters") {
     containmentClusters = clusters
     clusterCount = clusters.size
     containmentClusterPolygons = new js.Array(clusterCount)
@@ -324,9 +396,11 @@ class MetaForce extends CustomForce[SimPost] {
     containmentClusterPostIndices = clusters.map(_.posts.map(p => postIdToIndex(p.id))(breakOut): js.Array[Int])
 
     updatedNodeSizes()
+    }
   }
 
   def updatedNodeSizes() {
+    time("updateNodeSizes") {
     containmentClusterMaxRadius = containmentClusters.map{ c =>
       val area = c.posts.map{ p =>
         val radius = p.radius + Constants.nodePadding
@@ -337,6 +411,7 @@ class MetaForce extends CustomForce[SimPost] {
       val boundingRadius = radius * Math.sqrt(2) // radius of bounding circle of bounding square
       boundingRadius
     }
+    }
   }
 
   val rectBound = new RectBound
@@ -344,6 +419,7 @@ class MetaForce extends CustomForce[SimPost] {
   val clustering = new Clustering
   val pushOutOfWrongCluster = new PushOutOfWrongCluster
   val clusterCollision = new ClusterCollision
+  val connectionDistance = new ConnectionDistance
 
   override def force(alpha: Double) {
     time("total") {
@@ -382,6 +458,7 @@ class MetaForce extends CustomForce[SimPost] {
       time("clustering") { clustering.force(this, alpha) }
       time("pushOutOfWrongCluster"){ pushOutOfWrongCluster.force(this, alpha) }
       time("clusterCollision"){ clusterCollision.force(this, alpha) }
+      time("connectionDistance"){ connectionDistance.force(this, alpha) }
 
       time("force.apply") {
         //write pos + vel to simpost
@@ -451,8 +528,8 @@ object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
     .alphaMin(0.01) // stop simulation earlier (default = 0.001)
     .velocityDecay(0.9) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
-    .force("gravityx", forces.gravityX)
-    .force("gravityy", forces.gravityY)
+    // .force("gravityx", forces.gravityX)
+    // .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
     // .force("collision", forces.collision)
     // // .force("distance", forces.distance)
