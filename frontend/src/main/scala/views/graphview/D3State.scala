@@ -67,15 +67,15 @@ object ForceUtil {
     }
   }
 
-  def jitter = scala.util.Random.nextDouble
+  @inline def jitter = scala.util.Random.nextDouble
 
-  @inline def min2By(list:js.Array[Int], f:Int => Int):(Int,Int) = {
+  @inline def min2By(list:js.Array[Int], f:Int => Double):(Int,Int) = {
     val n = list.size
     var i = 0
-    var min1Value = Int.MaxValue
-    var min2Value = Int.MaxValue
     var min1 = Int.MaxValue
     var min2 = Int.MaxValue
+    var min1Value = Double.MaxValue
+    var min2Value = Double.MaxValue
     while(i < n) {
       val x = list(i)
       val value = f(x)
@@ -203,12 +203,17 @@ class PushOutOfWrongCluster {
             vel(ai2 + 1) += nodePushDir.y
 
             // push closest nodes of cluster (forming line segment) back
-            min2By(containmentClusterPostIndices, 
-            containmentClusterPostIndices(ci).toSeq.sortBy(i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
-              val i2 = i * 2
-              vel(i2) += -nodePushDir.x
-              vel(i2 + 1) += -nodePushDir.y
-            }
+            val (ia, ib) = min2By(containmentClusterPostIndices(ci), i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y))
+            vel(ia*2) += -nodePushDir.x
+            vel(ia*2 + 1) += -nodePushDir.y
+            vel(ib*2) += -nodePushDir.x
+            vel(ib*2 + 1) += -nodePushDir.y
+            // TODO: the closest points are not necessarily forming the closest line segment.
+            // containmentClusterPostIndices(ci).toSeq.sortBy(i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
+            //   val i2 = i * 2
+            //   vel(i2) += -nodePushDir.x
+            //   vel(i2 + 1) += -nodePushDir.y
+            // }
           }
         }
       }
@@ -458,6 +463,7 @@ class MetaForce extends CustomForce[SimPost] {
       time("clustering") { clustering.force(this, alpha) }
       time("pushOutOfWrongCluster"){ pushOutOfWrongCluster.force(this, alpha) }
       time("clusterCollision"){ clusterCollision.force(this, alpha) }
+      //TODO: custer - connection collision
       time("connectionDistance"){ connectionDistance.force(this, alpha) }
 
       time("force.apply") {
@@ -525,9 +531,13 @@ object Forces {
 }
 
 object Simulation {
-  def apply(forces: Forces): Simulation[SimPost] = d3.forceSimulation[SimPost]()
-    .alphaMin(0.01) // stop simulation earlier (default = 0.001)
-    .velocityDecay(0.9) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
+  def apply(forces: Forces): Simulation[SimPost] = {
+    val alphaMin = 0.8  // stop simulation earlier (default = 0.001)
+    val ticks = 60 // Default = 300
+    d3.forceSimulation[SimPost]()
+    .alphaMin(alphaMin)
+    .alphaDecay(1-Math.pow(alphaMin,(1.0/ticks)))
+    .velocityDecay(0.8) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
@@ -538,6 +548,7 @@ object Simulation {
   // .force("redirectedConnection", forces.redirectedConnection)
   // .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
+  }
 }
 
 // TODO: run simulation in tests. jsdom timer bug?
