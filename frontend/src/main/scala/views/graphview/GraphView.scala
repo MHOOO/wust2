@@ -1,5 +1,6 @@
 package wust.frontend.views.graphview
 
+import wust.util.time.time
 import wust.frontend.DevPrintln
 import org.scalajs.d3v4._
 import org.scalajs.dom
@@ -165,27 +166,33 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     //TODO: react on size of div
     // https://marcj.github.io/css-element-queries/
     // val padding = 15
-    val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
-    val width = rect.width
-    val height = rect.height
-    if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
-      DevPrintln("    updating bounds and zoom")
-      val postsArea = rxSimPosts.now.map(p => (p.radius + 100) * (p.radius + 100)).sum * 4
-      val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
+    time("recalculateBoundsAndZoom") {
+      val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
+      val width = rect.width
+      val height = rect.height
+      if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
+        DevPrintln("    updating bounds and zoom")
+        val postsArea = rxSimPosts.now.map(p => (p.radius + 100) * (p.radius + 100)).sum * 4
+        val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
 
-      svg.call(d3State.zoom.transform _, d3.zoomIdentity
-        .translate(width / 2, height / 2)
-        .scale(scale))
+        svg.call(d3State.zoom.transform _, d3.zoomIdentity
+          .translate(width / 2, height / 2)
+          .scale(scale))
 
-      d3State.forces.meta.rectBound.xOffset = -width / 2 / scale
-      d3State.forces.meta.rectBound.yOffset = -height / 2 / scale
-      d3State.forces.meta.rectBound.width = width / scale
-      d3State.forces.meta.rectBound.height = height / scale
+        d3State.forces.meta.rectBound.xOffset = -width / 2 / scale
+        d3State.forces.meta.rectBound.yOffset = -height / 2 / scale
+        d3State.forces.meta.rectBound.width = width / scale
+        d3State.forces.meta.rectBound.height = height / scale
+        d3State.forces.meta.gravity.width = width / scale
+        d3State.forces.meta.gravity.height = height / scale
+        InitialPosition.width = width / scale
+        InitialPosition.height = height / scale
 
-      rxSimPosts.now.foreach { simPost =>
-        simPost.fixedPos = js.undefined
+        rxSimPosts.now.foreach { simPost =>
+          simPost.fixedPos = js.undefined
+        }
+        // d3State.simulation.alpha(1).restart()
       }
-      d3State.simulation.alpha(1).restart()
     }
   }
 
@@ -199,7 +206,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
     DevPrintln("    updating graph simulation")
 
-    d3State.simulation.nodes(simPosts) // also sets initial positions
+    d3State.simulation.nodes(simPosts) // also sets initial positions if NaN
     d3State.forces.connection.links(simConnection)
     d3State.forces.redirectedConnection.links(simRedirectedConnection)
     d3State.forces.containment.links(simContainment)
@@ -212,7 +219,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     // wait for the drawcall and start simulation
     window.requestAnimationFrame{ (_) =>
       recalculateBoundsAndZoom()
-      d3State.simulation.alpha(1).restart()
+      d3State.simulation.alpha(1).stop()
     }
   }
 
@@ -223,6 +230,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.containment.initialize(rxSimPosts.now)
     d3State.forces.collapsedContainment.initialize(rxSimPosts.now)
     d3State.forces.meta.updatedNodeSizes()
+    rxContainmentCluster.now.foreach(_.recalculateConvexHull())
   }
 
   private def onPostDrag() {

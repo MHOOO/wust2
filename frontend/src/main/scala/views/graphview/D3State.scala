@@ -14,6 +14,7 @@ import collection.breakOut
 
 object Constants {
   val nodePadding = 150
+  val invalidPosition = 91684313.7
 }
 
 @ScalaJSDefined
@@ -137,19 +138,20 @@ class KeepDistance {
     var ai2 = 0
     while (ai2 < n2) {
       val ai = ai2 / 2
-      val ax = pos(ai2)
-      val ay = pos(ai2 + 1)
+      var ax = pos(ai2)
+      var ay = pos(ai2 + 1)
       forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){ bi2 =>
         if (bi2 != ai2) {
-          val bx = pos(bi2)
-          val by = pos(bi2 + 1)
+          var bx = pos(bi2)
+          var by = pos(bi2 + 1)
+
+          if(ax == bx && ay == by) {
+            ax += minVisibleDistance * 0.5 + jitter
+            bx -= minVisibleDistance * 0.5 + jitter
+          }
 
           // val centerDist = (b - a).length
           val centerDist = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
-          // if (centerDist == 0) {
-          //   pos(bi2) += jitter
-          //   pos(bi2 + 1) += jitter
-          // } else {
           val visibleDist = centerDist - nodes(ai).radius - nodes(bi2 / 2).radius
           if (visibleDist < minVisibleDistance) {
             val dirx = (bx - ax) / centerDist
@@ -329,6 +331,28 @@ class ConnectionDistance {
   }
 }
 
+class Gravity {
+  var width: Double = 500
+  var height: Double = 500
+
+  val strength = 0.005
+  import ForceUtil._
+  def force(data: MetaForce, alpha: Double) {
+    // stretch gravity depending on aspect ratio
+    val strengthX = strength * (height / width)
+    val strengthY = strength
+    import data._
+    var i2 = 0
+    val n2 = n * 2
+    while(i2 < n2) {
+      vel(i2) += -pos(i2) * strength * alpha
+      vel(i2+1) += -pos(i2+1) * strength * alpha
+      
+      i2 += 2
+    }
+  }
+}
+
 @ScalaJSDefined
 class MetaForce extends CustomForce[SimPost] {
   var n: Int = 0
@@ -425,6 +449,7 @@ class MetaForce extends CustomForce[SimPost] {
   val pushOutOfWrongCluster = new PushOutOfWrongCluster
   val clusterCollision = new ClusterCollision
   val connectionDistance = new ConnectionDistance
+  val gravity = new Gravity
 
   override def force(alpha: Double) {
     time("total") {
@@ -433,7 +458,16 @@ class MetaForce extends CustomForce[SimPost] {
         //read pos + vel from simpost
         i = 0
         i2 = 0
+        if(nodes(0).x == js.undefined || nodes(0).x.get.isNaN || nodes(0).x.get == Constants.invalidPosition) {
+          println("initial position!")
+        }
         while (i < n) {
+          if(nodes(i).x == js.undefined || nodes(i).x.get.isNaN || nodes(i).x.get == Constants.invalidPosition) nodes(i).x = InitialPosition.x(i)
+          if(nodes(i).y == js.undefined || nodes(i).y.get.isNaN || nodes(i).y.get == Constants.invalidPosition) nodes(i).y = InitialPosition.y(i)
+          if(nodes(i).vx == js.undefined || nodes(i).vx.get.isNaN) nodes(i).vx = 0
+          if(nodes(i).vy == js.undefined || nodes(i).vy.get.isNaN) nodes(i).vy = 0
+
+
           pos(i2) = nodes(i).x.get
           pos(i2 + 1) = nodes(i).y.get
           vel(i2) = nodes(i).vx.get
@@ -458,6 +492,7 @@ class MetaForce extends CustomForce[SimPost] {
       }
 
       // apply forces
+      time("gravity"){ gravity.force(this, alpha) }
       time("rectBound"){ rectBound.force(this, alpha) }
       time("keepDistance"){ keepDistance.force(this, alpha) }
       time("clustering") { clustering.force(this, alpha) }
@@ -530,14 +565,36 @@ object Forces {
   }
 }
 
+object InitialPosition {
+  var width: Double = 500
+  var height: Double = 500
+
+  val initialRadius = 150
+  val initialAngle = Math.PI * (3 - Math.sqrt(5))
+
+  val strengthX = width / height.toDouble // longer direction should be farther away
+
+  def x(i:Int) = {
+        var radius = initialRadius * Math.sqrt(i)
+        val angle = i * initialAngle
+        radius * Math.cos(angle) * strengthX
+  }
+
+  def y(i:Int) = {
+        var radius = initialRadius * Math.sqrt(i)
+        val angle = i * initialAngle
+        radius * Math.sin(angle)
+  }
+}
+
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = {
     val alphaMin = 0.8  // stop simulation earlier (default = 0.001)
-    val ticks = 60 // Default = 300
+    val ticks = 200 // Default = 300
     d3.forceSimulation[SimPost]()
     .alphaMin(alphaMin)
     .alphaDecay(1-Math.pow(alphaMin,(1.0/ticks)))
-    .velocityDecay(0.8) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
+    .velocityDecay(0.85) //TODO: should be 1, but https://github.com/d3/d3-force/issues/100
     // .force("gravityx", forces.gravityX)
     // .force("gravityy", forces.gravityY)
     // .force("repel", forces.repel)
@@ -549,6 +606,8 @@ object Simulation {
   // .force("containment", forces.containment)
   // .force("collapsedContainment", forces.collapsedContainment)
   }
+
+
 }
 
 // TODO: run simulation in tests. jsdom timer bug?

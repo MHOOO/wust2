@@ -25,8 +25,13 @@ class GraphState(val state: GlobalState)(implicit ctx: Ctx.Owner) {
     val graph = rxDisplayGraph().graph
     val collapsedPostIds = rxCollapsedPostIds()
 
-    graph.posts.map { p =>
+    graph.posts.zipWithIndex.map { case (p,i) =>
       val sp = new SimPost(p)
+
+      //TODO: this is only to avoid the initial positions of d3.simulation, and do that in GraphView.recalculateBoundsAndZoom
+      // if we replace d3.simulation we can hopefully remove this.
+      sp.x = Constants.invalidPosition
+      sp.y = Constants.invalidPosition
 
       def parents = rawGraph.parents(p.id)
       def hasParents = parents.nonEmpty
@@ -64,7 +69,7 @@ class GraphState(val state: GlobalState)(implicit ctx: Ctx.Owner) {
 
       sp
 
-    }.toJSArray
+    }.toJSArray // TODO: topological sort?
   }
 
   val rxPostIdToSimPost: Rx[Map[PostId, SimPost]] = rxSimPosts.fold(Map.empty[PostId, SimPost]) {
