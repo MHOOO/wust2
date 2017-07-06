@@ -17,8 +17,9 @@ import scalaz.Tag
 import scala.math.Ordering
 
 import org.scalajs.dom.{ window, document, console }
-import org.scalajs.dom.raw.{ Text, Element, HTMLElement }
+import org.scalajs.dom.raw.{ Text, Element, HTMLElement, Node }
 import scalatags.JsDom.all._
+import scalatags.JsDom.TypedTag
 import scala.scalajs.js
 import scalatags.rx.all._
 import scala.scalajs.js.timers.setTimeout
@@ -288,21 +289,18 @@ object TreeView {
     )
   }
 
-  def postTreeItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
-    val childNodes = tree.children
-      .sortBy(_.element)
-      .map(postTreeItem(state, c, _))
-      .toList
-
+  def postTreeItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
     div(
       paddingLeft := "10px",
       postItem(state, c, tree),
-      childNodes
     )
   }
 
   def apply(state: GlobalState)(implicit ctx: Ctx.Owner) = {
-    div(state.displayGraphWithParents.map { dg =>
+    val content = div(padding := "100px").render
+    val vdom = new VirtualDom[Tree[Post]](content, t => Tag.unwrap(t.element.id), (t1, t2) => t1.element.id == t2.element.id && t1.element.title == t2.element.title)
+
+    state.displayGraphWithParents.foreach { dg =>
       import dg.graph
       val rootPosts = graph.posts
         .filter(p => graph.parents(p.id).isEmpty)
@@ -316,11 +314,63 @@ object TreeView {
       val trees = rootPosts.map(redundantSpanningTree[Post](_, postChildren _))
       val context = new TreeContext(trees: _*)
 
-      val items = trees.map(postTreeItem(state, context, _))
-      div(
-        padding := "100px",
-        if (items.isEmpty) Seq(newItem(state)) else items
-      ).render
-    })
+      //TODO:
+      // val items = trees.map(postTreeItem(state, context, _))
+      // val itemsOrNew = if (items.isEmpty) Seq(newItem(state)) else items
+
+      //TODO
+      // val childNodes = tree.children
+      //   .sortBy(_.element)
+      //   .map(postTreeItem(state, c, _))
+      //   .toList
+
+      vdom.update(trees, tree => postTreeItem(state, context, tree))
+    }
+
+    div(
+      content
+    )
+  }
+}
+trait VDom[T] {
+  def update(elements: List[T]): Unit
+}
+
+// class VDomWrapper[T](baseHtml: Node, toId: T => String, toHtml: T => Node, isEqual: (T, T) => Boolean) {
+//   val
+
+//   def update(elements: List[T]): Unit = {
+
+//   }
+// }
+
+class VirtualDom[T](baseHtml: Node, toId: T => String, isEqual: (T, T) => Boolean) {
+  private var members = Map.empty[String, T]
+
+  def update(elements: List[T], toHtml: T => TypedTag[HTMLElement]): Unit = {
+    val removedIds = members.keySet filterNot elements.map(toId).toSet
+    removedIds.foreach { id =>
+      val existingHtml = document.getElementById(id)
+      baseHtml.removeChild(existingHtml)
+    }
+
+    elements.foreach { elem =>
+      val id = toId(elem)
+      members.get(id) match {
+        case Some(prevElem) =>
+          if (!isEqual(prevElem, elem)) {
+            val existingHtml = document.getElementById(id)
+            val newHtml = toHtml(elem)(id = id).render
+            baseHtml.replaceChild(newHtml, existingHtml)
+          }
+        case None =>
+          val newHtml = toHtml(elem)(id = id).render
+          baseHtml.appendChild(newHtml)
+      }
+    }
+
+    //TODO ordering?
+
+    members = elements.by(toId)
   }
 }
