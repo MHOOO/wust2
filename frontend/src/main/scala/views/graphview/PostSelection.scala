@@ -89,7 +89,7 @@ class PostSelection(graphState: GraphState, d3State: D3State, postDrag: PostDrag
     recalculateNodeSizes(post)
   }
 
-  private def recalculateNodeSizes(post: Selection[SimPost]) {
+  def recalculateNodeSizes(post: Selection[SimPost]) {
     post.each({ (node: HTMLElement, p: SimPost) =>
       p.recalculateSize(node, d3State.transform.k)
     })

@@ -205,12 +205,13 @@ class PushOutOfWrongCluster {
             vel(ai2 + 1) += nodePushDir.y
 
             // push closest nodes of cluster (forming line segment) back
+            // TODO: the closest points are not necessarily forming the closest line segment.
             val (ia, ib) = min2By(containmentClusterPostIndices(ci), i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y))
             vel(ia*2) += -nodePushDir.x
             vel(ia*2 + 1) += -nodePushDir.y
             vel(ib*2) += -nodePushDir.x
             vel(ib*2 + 1) += -nodePushDir.y
-            // TODO: the closest points are not necessarily forming the closest line segment.
+
             // containmentClusterPostIndices(ci).toSeq.sortBy(i => Vec2.lengthSq(pos(i * 2) - center.x, pos(i * 2 + 1) - center.y)).take(2).foreach{ i =>
             //   val i2 = i * 2
             //   vel(i2) += -nodePushDir.x
@@ -335,7 +336,7 @@ class Gravity {
   var width: Double = 500
   var height: Double = 500
 
-  val strength = 0.005
+  val strength = 0.01
   import ForceUtil._
   def force(data: MetaForce, alpha: Double) {
     // stretch gravity depending on aspect ratio
@@ -381,7 +382,7 @@ class MetaForce extends CustomForce[SimPost] {
   var nonIntersectingClusterPairs: js.Array[js.Tuple2[Int, Int]] = js.Array()
 
   override def initialize(nodes: js.Array[SimPost]) {
-    time(s"initialize: ${nodes.size} nodes") {
+    /*time(s"initialize: ${nodes.size} nodes")*/ {
       this.nodes = nodes
       postIdToIndex.clear()
       postIdToIndex ++= nodes.map(_.id).zipWithIndex
@@ -398,7 +399,7 @@ class MetaForce extends CustomForce[SimPost] {
   }
 
   def setConnections(connections: js.Array[SimConnection]) {
-    time("setConnections") {
+    /*time("setConnections")*/ {
       val m = connections.size
       this.connections = new js.Array(m*2)
       var i = 0
@@ -411,7 +412,7 @@ class MetaForce extends CustomForce[SimPost] {
   }
 
   def setContainmentClusters(clusters: js.Array[ContainmentCluster]) {
-    time("setContainmentClusters") {
+    /*time("setContainmentClusters")*/ {
       containmentClusters = clusters
       clusterCount = clusters.size
       containmentClusterPolygons = new js.Array(clusterCount)
@@ -429,7 +430,7 @@ class MetaForce extends CustomForce[SimPost] {
   }
 
   def updatedNodeSizes() {
-    time("updateNodeSizes") {
+    /*time("updateNodeSizes")*/ {
       containmentClusterMaxRadius = containmentClusters.map{ c =>
         val area = c.posts.map{ p =>
           val radius = p.radius + Constants.nodePadding
@@ -472,8 +473,8 @@ class MetaForce extends CustomForce[SimPost] {
   var updatedInvalidPosition = false
 
   override def force(alpha: Double) {
-    time("total") {
-      time("\nforce.init") {
+    time("simulation frame") {
+      /*time("\nforce.init")*/ {
         maxRadius = 0.0
         //read pos + vel from simpost
         i = 0
@@ -498,8 +499,8 @@ class MetaForce extends CustomForce[SimPost] {
 
           pos(i2) = nodes(i).x.get
           pos(i2 + 1) = nodes(i).y.get
-          vel(i2) = 0 //nodes(i).vx.get
-          vel(i2 + 1) = 0 //nodes(i).vy.get
+          vel(i2) = nodes(i).vx.get
+          vel(i2 + 1) = nodes(i).vy.get
           maxRadius = maxRadius max nodes(i).radius
           i += 1
           i2 += 2
@@ -515,16 +516,16 @@ class MetaForce extends CustomForce[SimPost] {
       }
 
       // apply forces
-      time("gravity"){ gravity.force(this, alpha) }
-      time("rectBound"){ rectBound.force(this, alpha) }
-      time("keepDistance"){ keepDistance.force(this, alpha) }
-      time("clustering") { clustering.force(this, alpha) }
-      time("pushOutOfWrongCluster"){ pushOutOfWrongCluster.force(this, alpha) }
-      time("clusterCollision"){ clusterCollision.force(this, alpha) }
+      /*time("gravity")*/{ gravity.force(this, alpha) }
+      /*time("rectBound")*/{ rectBound.force(this, alpha) }
+      /*time("keepDistance")*/{ keepDistance.force(this, alpha) }
+      /*time("clustering")*/ { clustering.force(this, alpha) }
+      /*time("pushOutOfWrongCluster")*/{ pushOutOfWrongCluster.force(this, alpha) }
+      /*time("clusterCollision")*/{ clusterCollision.force(this, alpha) }
       //TODO: custer - connection collision
-      time("connectionDistance"){ connectionDistance.force(this, alpha) }
+      /*time("connectionDistance")*/{ connectionDistance.force(this, alpha) }
 
-      time("force.apply") {
+      /*time("force.apply")*/ {
         //write pos + vel to simpost
         i = 0
         i2 = 0
@@ -593,7 +594,7 @@ object InitialPosition {
   var width: Double = 500
   var height: Double = 500
 
-  val initialRadius = 200
+  val initialRadius = 300
   val initialAngle = Math.PI * (3 - Math.sqrt(5))
 
   def strengthX = width / height.toDouble // longer direction should be farther away
@@ -615,8 +616,8 @@ object InitialPosition {
 
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = {
-    val alphaMin = 0.9  // stop simulation earlier (default = 0.001)
-    val ticks = 100 // Default = 300
+    val alphaMin = 0.7  // stop simulation earlier (default = 0.001)
+    val ticks = 200 // Default = 300
     d3.forceSimulation[SimPost]()
       .alphaMin(alphaMin)
       .alphaDecay(1-Math.pow(alphaMin,(1.0/ticks)))

@@ -60,19 +60,21 @@ object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
   // https://codeplea.com/introduction-to-splines
   // https://github.com/d3/d3-shape#curves
   // val curve = d3.curveCardinalClosed
-  // val curve = d3.curveCatmullRomClosed.alpha(0.5)
-  val curve = d3.curveLinearClosed
+  val curve = d3.curveCatmullRomClosed.alpha(0.5)
+  // val curve = d3.curveLinearClosed
   // val curve = d3.curveNatural
 
   override def draw(hull: Selection[ContainmentCluster]) {
     hull
       .attr("d", { (cluster: ContainmentCluster) => d3.line().curve(curve)(cluster.convexHull) })
-      // .style("stroke-width", (cluster: ContainmentCluster) => s"${cluster.depth * 15}px") // *2 because the stroke is half inward, half outward
+      .style("stroke-width", (cluster: ContainmentCluster) => s"${cluster.depth * 15}px") // *2 because the stroke is half inward, half outward
       .style("opacity", (cluster: ContainmentCluster) => cluster.parent.opacity * 0.8)
   }
 }
 
 object CollapsedContainmentHullSelection extends DataSelection[ContainmentCluster] {
+  import ContainmentHullSelection.curve
+
   override val tag = "path"
   override def enterAppend(hull: Selection[ContainmentCluster]) {
     hull
@@ -83,11 +85,6 @@ object CollapsedContainmentHullSelection extends DataSelection[ContainmentCluste
     // .style("stroke-dasharray", "10 5")
   }
 
-  // https://codeplea.com/introduction-to-splines
-  // https://github.com/d3/d3-shape#curves
-  // val curve = d3.curveCardinalClosed
-  val curve = d3.curveCatmullRomClosed.alpha(0.5)
-  // val curve = d3.curveNatural
 
   override def draw(hull: Selection[ContainmentCluster]) {
     hull
