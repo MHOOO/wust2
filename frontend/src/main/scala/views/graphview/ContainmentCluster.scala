@@ -44,9 +44,26 @@ class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost],
   }
 
   recalculateConvexHull()
+
+  private var _maxRadius: Double = 1.0
+  def maxRadius = _maxRadius
+
+  def recalculateMaxRadius() {
+    var maxR = 0.0
+    val area = children.map{ p =>
+      val radius = p.radius + Constants.nodePadding * 0.5
+      maxR = maxR max p.radius
+      val radiusOfBoundingCircleOfBoundingSquare = radius * Math.sqrt(2)
+      val boundingCircleArea = 2 * Math.PI * radiusOfBoundingCircleOfBoundingSquare * radiusOfBoundingCircleOfBoundingSquare
+      boundingCircleArea
+    }.sum
+    val radius = Math.sqrt(area / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
+    val boundingRadius = radius // * Math.sqrt(2) // radius of bounding circle of bounding square
+    _maxRadius = boundingRadius max (parent.radius + Constants.nodePadding + maxR*2) // so that the largest node still fits in the bounding radius of the cluster
+  }
 }
 
-object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
+object ContainmentClusterSelection extends DataSelection[ContainmentCluster] {
   override val tag = "path"
   override def enterAppend(hull: Selection[ContainmentCluster]) {
     hull
@@ -72,8 +89,8 @@ object ContainmentHullSelection extends DataSelection[ContainmentCluster] {
   }
 }
 
-object CollapsedContainmentHullSelection extends DataSelection[ContainmentCluster] {
-  import ContainmentHullSelection.curve
+object CollapsedContainmentClusterSelection extends DataSelection[ContainmentCluster] {
+  import ContainmentClusterSelection.curve
 
   override val tag = "path"
   override def enterAppend(hull: Selection[ContainmentCluster]) {
@@ -85,11 +102,27 @@ object CollapsedContainmentHullSelection extends DataSelection[ContainmentCluste
     // .style("stroke-dasharray", "10 5")
   }
 
-
   override def draw(hull: Selection[ContainmentCluster]) {
     hull
       .attr("d", { (cluster: ContainmentCluster) => d3.line().curve(curve)(cluster.convexHull) })
       .style("stroke-width", (cluster: ContainmentCluster) => s"${cluster.depth * 15}px")
       .style("opacity", (cluster: ContainmentCluster) => cluster.parent.opacity * 0.4)
+  }
+}
+
+object ContainmentClusterBoundingRadiusSelection extends DataSelection[ContainmentCluster] {
+  override val tag = "circle"
+  override def update(cluster: Selection[ContainmentCluster]) {
+    cluster
+      .attr("stroke", (cluster: ContainmentCluster) => baseColor(cluster.parent.id))
+      .style("stroke-width", "3px")
+      .attr("fill", "transparent")
+      .attr("stroke-dasharray", "10,10")
+  }
+
+  override def draw(cluster: Selection[ContainmentCluster]) {
+    cluster
+      .style("transform", (c: ContainmentCluster) => s"translate(${c.parent.x.get}px,${c.parent.y.get}px)")
+      .attr("r", (c: ContainmentCluster) => c.maxRadius)
   }
 }
