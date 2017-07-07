@@ -26,18 +26,16 @@ import scala.scalajs.js.timers.setTimeout
 import org.scalajs.dom.ext.KeyCode
 import org.scalajs.dom.{ Event, KeyboardEvent }
 
-//TODO proper ordering and move to wust.ids
-object PostOrdering extends Ordering[Post] {
-  def compare(a: Post, b: Post) = Tag.unwrap(a.id) compare Tag.unwrap(b.id)
-}
-
 object TreeView {
   import Elements._
 
   //TODO better?
   private var focusedPostId: Option[PostId] = None
+  private var treeContext: TreeContext[Post] = new TreeContext()
 
-  implicit val postOrdering = PostOrdering
+  implicit val postOrdering = new Ordering[Post] {
+    def compare(a: Post, b: Post) = Tag.unwrap(a.id) compare Tag.unwrap(b.id)
+  }
 
   // preserves newlines and white spaces: white-space: pre
   def textfield = div(contenteditable := "true", style := "white-space: pre", width := "80ex")
@@ -139,7 +137,7 @@ object TreeView {
     } catch { case _: Throwable => } // https://github.com/tmpvar/jsdom/issues/317
   }
 
-  def handleKey(state: GlobalState, c: TreeContext[Post], tree: Tree[Post], event: KeyboardEvent) = {
+  def handleKeyOnPost(state: GlobalState, tree: Tree[Post], event: KeyboardEvent) = {
     val post = tree.element
     val elem = event.target.asInstanceOf[HTMLElement]
     onKey(event) {
@@ -149,7 +147,7 @@ object TreeView {
         val newPost = Post.newId(newPostText)
         //TODO: do not create empty post, create later when there is a title
         focusedPostId = Some(newPost.id)
-        c.parentMap.get(tree) match {
+        treeContext.parentMap.get(tree) match {
           case Some(parentTree) =>
             val newContainment = Containment(parentTree.element.id, newPost.id)
             state.persistence.addChangesEnriched(addPosts = Set(newPost), addContainments = Set(newContainment), updatePosts = updatedPost.toSet)
@@ -161,9 +159,9 @@ object TreeView {
         false
       case KeyCode.Tab => event.shiftKey match {
         case false =>
-          c.previousMap.get(tree).foreach { previousTree =>
+          treeContext.previousMap.get(tree).foreach { previousTree =>
             val newContainment = Containment(previousTree.element.id, post.id)
-            val delContainment = c.parentMap.get(tree).map { parentTree =>
+            val delContainment = treeContext.parentMap.get(tree).map { parentTree =>
               Containment(parentTree.element.id, post.id)
             }
             focusedPostId = Some(post.id)
@@ -172,8 +170,8 @@ object TreeView {
           false
         case true =>
           for {
-            parent <- c.parentMap.get(tree)
-            grandParent = c.parentMap.get(parent)
+            parent <- treeContext.parentMap.get(tree)
+            grandParent = treeContext.parentMap.get(parent)
           } {
             val newContainments = grandParent match {
               case Some(grandParent) => Set(Containment(grandParent.element.id, post.id))
@@ -203,7 +201,7 @@ object TreeView {
         val sel = window.getSelection.getRangeAt(0)
         val textElem = elem.firstChild.asInstanceOf[Text]
         if (sel.startOffset == textElem.length && sel.endOffset == textElem.length) {
-          c.nextMap.get(tree).map { nextTree =>
+          treeContext.nextMap.get(tree).map { nextTree =>
             val nextPost = nextTree.element
             val updatedPost = post.copy(title = post.title + " " + nextPost.title)
             focusedPostId = Some(post.id)
@@ -214,7 +212,7 @@ object TreeView {
       case KeyCode.Backspace if !event.shiftKey =>
         val sel = window.getSelection.getRangeAt(0)
         if (sel.startOffset == 0 && sel.endOffset == 0) {
-          c.previousMap.get(tree).map { previousTree =>
+          treeContext.previousMap.get(tree).map { previousTree =>
             val prevPost = previousTree.element
             val (_, remainingText) = textAroundCursorSelection(elem)
             val updatedPost = prevPost.copy(title = prevPost.title + " " + remainingText)
@@ -227,7 +225,7 @@ object TreeView {
     }
   }
 
-  def postItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
+  def postItem(state: GlobalState, tree: Tree[Post])(implicit ctx: Ctx.Owner): Frag = {
     val post = tree.element
     val area = textfield(
       post.title,
@@ -242,7 +240,7 @@ object TreeView {
           state.persistence.addChanges(updatePosts = Set(updatedPost))
         }
       },
-      onkeydown := { (e: KeyboardEvent) => handleKey(state, c, tree, e) }
+      onkeydown := { (e: KeyboardEvent) => handleKeyOnPost(state, tree, e) }
     ).render
 
     //TODO: better?
@@ -289,16 +287,23 @@ object TreeView {
     )
   }
 
-  def postTreeItem(state: GlobalState, c: TreeContext[Post], tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
+  def postTreeItem(state: GlobalState, tree: Tree[Post])(implicit ctx: Ctx.Owner) = {
     div(
       paddingLeft := "10px",
-      postItem(state, c, tree),
+      postItem(state, tree),
     )
   }
 
   def apply(state: GlobalState)(implicit ctx: Ctx.Owner) = {
     val content = div(padding := "100px").render
-    val vdom = new VirtualDom[Tree[Post]](content, t => Tag.unwrap(t.element.id), (t1, t2) => t1.element.id == t2.element.id && t1.element.title == t2.element.title)
+
+    implicit val htmlableTree = new HtmlableElement[Tree[Post]] {
+      def toId(t: Tree[Post]): String = Tag.unwrap(t.element.id)
+      def toHtml(t: Tree[Post]): TypedTag[HTMLElement] = postTreeItem(state, t)
+      def isEqual(t1: Tree[Post], t2: Tree[Post]): Boolean = t1.element.id == t2.element.id && t1.element.title == t2.element.title
+    }
+
+    val htmlUpdater = new UpdateHtml[Tree[Post]](content)
 
     state.displayGraphWithParents.foreach { dg =>
       import dg.graph
@@ -312,7 +317,9 @@ object TreeView {
       }
 
       val trees = rootPosts.map(redundantSpanningTree[Post](_, postChildren _))
-      val context = new TreeContext(trees: _*)
+
+      //sideEffect: set treeContext
+      treeContext = new TreeContext(trees: _*)
 
       //TODO:
       // val items = trees.map(postTreeItem(state, context, _))
@@ -321,10 +328,10 @@ object TreeView {
       //TODO
       // val childNodes = tree.children
       //   .sortBy(_.element)
-      //   .map(postTreeItem(state, c, _))
+      //   .map(postTreeItem(state, treeContext, _))
       //   .toList
 
-      vdom.update(trees, tree => postTreeItem(state, context, tree))
+      htmlUpdater.update(trees)
     }
 
     div(
@@ -332,27 +339,35 @@ object TreeView {
     )
   }
 }
-trait VDom[T] {
-  def update(elements: List[T]): Unit
+
+trait HtmlableElement[T] {
+  def toId(t: T): String
+  def toHtml(t: T): TypedTag[HTMLElement]
+  def isEqual(t1: T, t2: T): Boolean
 }
 
-// class VDomWrapper[T](baseHtml: Node, toId: T => String, toHtml: T => Node, isEqual: (T, T) => Boolean) {
-//   val
+trait RenderHtml[T] {
+  def update(elements: Seq[T])(implicit htmlable: HtmlableElement[T]): Unit
+}
 
-//   def update(elements: List[T]): Unit = {
+class RenderNestedHtml[T] extends RenderHtml[T] {
+  def update(elements: Seq[T])(implicit htmlable: HtmlableElement[T]): Unit = {
+  }
+}
 
-//   }
-// }
-
-class VirtualDom[T](baseHtml: Node, toId: T => String, isEqual: (T, T) => Boolean) {
+class UpdateHtml[T](baseHtml: Node) extends RenderHtml[T] {
   private var members = Map.empty[String, T]
 
-  def update(elements: List[T], toHtml: T => TypedTag[HTMLElement]): Unit = {
+  def update(elements: Seq[T])(implicit htmlable: HtmlableElement[T]): Unit = {
+    import htmlable._
+
     val removedIds = members.keySet filterNot elements.map(toId).toSet
     removedIds.foreach { id =>
       val existingHtml = document.getElementById(id)
       baseHtml.removeChild(existingHtml)
     }
+
+    //TODO sorting changed, replace
 
     elements.foreach { elem =>
       val id = toId(elem)
@@ -360,16 +375,14 @@ class VirtualDom[T](baseHtml: Node, toId: T => String, isEqual: (T, T) => Boolea
         case Some(prevElem) =>
           if (!isEqual(prevElem, elem)) {
             val existingHtml = document.getElementById(id)
-            val newHtml = toHtml(elem)(id = id).render
+            val newHtml = toHtml(elem)(attr("id") := id).render
             baseHtml.replaceChild(newHtml, existingHtml)
           }
         case None =>
-          val newHtml = toHtml(elem)(id = id).render
+          val newHtml = toHtml(elem)(attr("id") := id).render
           baseHtml.appendChild(newHtml)
       }
     }
-
-    //TODO ordering?
 
     members = elements.by(toId)
   }
