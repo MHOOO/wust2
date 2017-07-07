@@ -137,7 +137,10 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     .style("fill", "#666")
 
   initContainerDimensionsAndPositions()
+  recalculateBoundsAndZoom() // important when switching to GraphView from another view
   initEvents()
+
+  state.jsError.foreach {_ => d3State.simulation.stop()}
 
   // set the background and headings according to focused parents
   Rx {
@@ -191,7 +194,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         rxSimPosts.now.foreach { simPost =>
           simPost.fixedPos = js.undefined
         }
-        // d3State.simulation.alpha(1).restart()
+        d3State.simulation.alpha(1).restart()
       }
     }
   }
@@ -219,7 +222,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     // wait for the drawcall and start simulation
     window.requestAnimationFrame{ (_) =>
       recalculateBoundsAndZoom()
-      d3State.simulation.alpha(1).stop()
+      d3State.simulation.alpha(1).restart()
     }
   }
 
@@ -288,21 +291,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     postCreatorMenu.draw()
   }
 
-  def now = System.nanoTime
-  var lastDraw: Long = now
-  var durationMin: Long = Long.MaxValue
-  var durationMax: Long = 0
-  var durationSum: Long = 0
-  var n = 0
-  def ms(duration: Long) = s"${duration / 1000000}ms"
   private def draw() {
-    // val duration = now - lastDraw
-    // n += 1
-    // durationMin = durationMin min duration
-    // durationMax = durationMax max duration
-    // durationSum += duration
-    // println(s"tick $n: ${ms(duration)} || min: ${ms(durationMin)}, avg: ${ms(durationSum / n)}, max: ${ms(durationMax)}")
-    // lastDraw = now
+    d3State.forces.meta.updateClusterConvexHulls()
 
     postSelection.draw()
     postRadiusSelection.draw()
