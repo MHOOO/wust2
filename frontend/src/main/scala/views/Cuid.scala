@@ -1,4 +1,4 @@
-package wust
+package wust.frontend
 
 import wust.graph.Post
 import wust.ids.PostId
