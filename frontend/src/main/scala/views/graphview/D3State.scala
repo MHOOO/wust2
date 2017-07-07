@@ -336,7 +336,7 @@ class Gravity {
   var width: Double = 500
   var height: Double = 500
 
-  val strength = 0.01
+  val strength = 0.005
   import ForceUtil._
   def force(data: MetaForce, alpha: Double) {
     // stretch gravity depending on aspect ratio

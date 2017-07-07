@@ -114,15 +114,15 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       //   }
       //   draw()
       // }), br(),
-      iconButton("+", title := "zoom in", onclick := { () =>
-        svg.call(d3State.zoom.scaleBy _, 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
-      }), br(),
-      iconButton("0", title := "reset zoom", onclick := { () =>
-        recalculateBoundsAndZoom()
-      }), br(),
-      iconButton("-", title := "zoom out", onclick := { () =>
-        svg.call(d3State.zoom.scaleBy _, 1 / 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
-      })
+      // iconButton("+", title := "zoom in", onclick := { () =>
+      //   svg.call(d3State.zoom.scaleBy _, 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
+      // }), br(),
+      // iconButton("0", title := "reset zoom", onclick := { () =>
+      //   recalculateBoundsAndZoom()
+      // }), br(),
+      // iconButton("-", title := "zoom out", onclick := { () =>
+      //   svg.call(d3State.zoom.scaleBy _, 1 / 1.2) //TODO: transition for smooth animation, zoomfactor in global constant
+      // })
     ).render)
   }
 
@@ -253,7 +253,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.zoom
       .on("zoom", () => zoomed())
       .clickDistance(10) // interpret short drags as clicks
-    svg.call(d3State.zoom) // activate pan + zoom on svg
+    // svg.call(d3State.zoom) // activate pan + zoom on svg
 
     svg.on("click", { () =>
       if (state.postCreatorMenus.now.size == 0 && focusedPostId.now == None) {
@@ -274,9 +274,9 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     if (inInitialSimulation) container.style("visibility", "hidden")
     d3State.simulation.on("tick", () => if (!inInitialSimulation) draw())
     d3State.simulation.on("end", { () =>
-      rxSimPosts.now.foreach { simPost =>
-        simPost.fixedPos = simPost.pos
-      }
+      // rxSimPosts.now.foreach { simPost =>
+      //   simPost.fixedPos = simPost.pos
+      // }
       if (inInitialSimulation) {
         container.style("visibility", "visible")
         draw()
