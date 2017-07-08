@@ -27,8 +27,9 @@ import org.scalajs.dom.ext.KeyCode
 import org.scalajs.dom.{ Event, KeyboardEvent }
 
 trait CanBuildHtml[T] {
+  //TODO: generic key instead of string
   def toId(t: T): String
-  def toHtml(t: T): TypedTag[HTMLElement]
+  def toHtml(t: T, render: RenderHtml[T]): Node
   def isEqual(t1: T, t2: T): Boolean
 }
 
@@ -36,17 +37,35 @@ trait CanBuildNestedHtml[T] extends CanBuildHtml[T] {
   def children(element: T): Seq[T]
 }
 
+case class RenderParent[T](element: T, renderHtml: RenderHtml[T])
+
 trait RenderHtml[T] {
-  def getHtmlNode(element: T): Option[Node]
+  def nodeMap: Map[String, Node]
+  def elements: Seq[T]
+  def parent: Option[RenderParent[T]]
   def update(elements: Seq[T]): Unit
+
+  // def nextElement(id: String): Option[T] = elements.
+  // def prevElement(id: String): Option[T]
+
+  // private def findPreviousMap(trees: Seq[Tree[A]]): Map[Tree[A], Tree[A]] = {
+  //   val sortedTrees = trees.sortBy(_.element)
+  //   sortedTrees.drop(1).zip(sortedTrees).toMap ++ trees.map(tree => findPreviousMap(tree.children)).fold(Map.empty)(_ ++ _)
+  // }
+  // private def findNextMap(trees: Seq[Tree[A]]): Map[Tree[A], Tree[A]] = {
+  //   val sortedTrees = trees.sortBy(_.element)
+  //   sortedTrees.zip(sortedTrees.drop(1)).toMap ++ trees.map(tree => findNextMap(tree.children)).fold(Map.empty)(_ ++ _)
+  // }
 }
 
-class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: Node => RenderHtml[T])(implicit canBuild: CanBuildNestedHtml[T]) extends RenderHtml[T] {
+class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: (Node, RenderParent[T]) => RenderHtml[T])(implicit canBuild: CanBuildNestedHtml[T]) extends RenderHtml[T] {
   import canBuild._
 
   private var members = Map.empty[String, RenderHtml[T]]
 
-  def getHtmlNode(element: T): Option[Node] = inner.getHtmlNode(element)
+  def nodeMap = inner.nodeMap
+  def elements = inner.elements
+  def parent = inner.parent
 
   def update(elements: Seq[T]): Unit = {
     inner.update(elements)
@@ -54,8 +73,9 @@ class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: Node => Render
     members = elements.map { elem =>
       val id = toId(elem)
 
-      val htmlNode = inner.getHtmlNode(elem).get // must be there!
-      val render = members.getOrElse(id, new RenderNestedHtml[T](createRenderHtml(htmlNode), createRenderHtml))
+      val htmlNode = inner.nodeMap(id)
+      val parent = RenderParent[T](elem, inner)
+      val render = members.getOrElse(id, new RenderNestedHtml[T](createRenderHtml(htmlNode, parent), createRenderHtml))
       render.update(children(elem))
 
       id -> render
@@ -63,68 +83,54 @@ class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: Node => Render
   }
 }
 
-class RenderHtmlList[T](baseHtml: Node, placeholder: Option[TypedTag[HTMLElement]] = None)(implicit canBuild: CanBuildHtml[T]) extends RenderHtml[T] {
+class RenderHtmlList[T](baseHtml: Node, val parent: Option[RenderParent[T]] = None, placeholder: () => Option[Node] = () => None)(implicit canBuild: CanBuildHtml[T]) extends RenderHtml[T] {
   import canBuild._
 
-  //TODO: store dom node with T in map instead of document.getElementById?
-  private var members = Map.empty[String, T]
-  private var firstTime = true //TODO
-
-  private val baseId = wust.frontend.Cuid()
-  private val placeholderId = baseId + "placeholder"
-
-  def getHtmlNode(element: T): Option[Node] = {
-    val id = toId(element)
-    if (members.contains(id)) {
-      val htmlId = baseId + id
-      Option(document.getElementById(htmlId))
-    } else None
+  private object existing {
+    var nodeMap = Map.empty[String, Node]
+    var elements = Seq.empty[T]
+    var placeholder: Option[Node] = None
   }
 
+  def nodeMap = existing.nodeMap
+  def elements = existing.elements
+
   def update(elements: Seq[T]): Unit = {
-    val newMembers = elements.by(toId)
-    val removedIds = members.keySet filterNot newMembers.keySet
-    removedIds.foreach { id =>
-      val htmlId = baseId + id
-      val existingHtml = document.getElementById(htmlId)
-      baseHtml.removeChild(existingHtml)
-    }
+    // remove existing elements that are missing in the new element list
+    val removedIds = existing.nodeMap.keySet filterNot elements.map(toId).toSet
+    for {
+      id <- removedIds
+      existingHtml <- existing.nodeMap.get(id)
+    } baseHtml.removeChild(existingHtml)
 
-    //TODO sorting changed, replace
-
-    if (elements.isEmpty) {
-      placeholder.foreach { placeholder =>
-        if (firstTime || members.nonEmpty) {
-          val placeholderNode = placeholder(attr("id") := placeholderId).render
-          baseHtml.appendChild(placeholderNode)
-        }
-      }
+    // show a placeholder if there are no elements, remove it if not neccessary anymore
+    val newPlaceholder = if (elements.isEmpty) {
+      existing.placeholder orElse placeholder().map(baseHtml.appendChild _)
     } else {
-      placeholder.foreach { placeholder =>
-        if (!firstTime && members.isEmpty) {
-          val placeholderNode = document.getElementById(placeholderId)
-          baseHtml.removeChild(placeholderNode)
-        }
-      }
-
-      elements.foreach { elem =>
-        val id = toId(elem)
-        val htmlId = baseId + id
-        members.get(id) match {
-          case Some(prevElem) =>
-            if (!isEqual(prevElem, elem)) {
-              val existingHtml = document.getElementById(htmlId)
-              val newHtml = toHtml(elem)(attr("id") := htmlId).render
-              baseHtml.replaceChild(newHtml, existingHtml)
-            }
-          case None =>
-            val newHtml = toHtml(elem)(attr("id") := htmlId).render
-            baseHtml.appendChild(newHtml)
-        }
-      }
+      existing.placeholder.foreach(baseHtml.removeChild _)
+      None
     }
 
-    firstTime = false
-    members = newMembers
+    // replace existing elements if they have changed
+    val previousElements = existing.elements.collect { case element if !removedIds(toId(element)) => Some(element) }.toStream ++ Stream.continually(None)
+    val newNodeMap = (elements zip previousElements).map { case (elem, prevElem) =>
+      val elemHtml = prevElem match {
+        case Some(prevElem) =>
+          val existingHtml = existing.nodeMap(toId(prevElem))
+          if (!isEqual(prevElem, elem)) {
+            val newHtml = toHtml(elem, this)
+            baseHtml.replaceChild(newHtml, existingHtml)
+          } else existingHtml
+        case None =>
+          val newHtml = toHtml(elem, this)
+          baseHtml.appendChild(newHtml)
+      }
+
+      toId(elem) -> elemHtml
+    }.toMap
+
+    existing.placeholder = newPlaceholder
+    existing.nodeMap = newNodeMap
+    existing.elements = elements
   }
 }

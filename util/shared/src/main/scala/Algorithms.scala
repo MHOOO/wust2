@@ -136,9 +136,6 @@ object algorithm {
 
   case class Tree[A](element: A, children: Seq[Tree[A]])
   class TreeContext[A](trees: Tree[A]*)(implicit ordering: Ordering[A])  {
-    private def findParentMap(tree: Tree[A]): Map[Tree[A], Tree[A]] = {
-      tree.children.map(child => child -> tree).toMap ++ tree.children.map(findParentMap _).fold(Map.empty)(_ ++ _)
-    }
     private def findPreviousMap(trees: Seq[Tree[A]]): Map[Tree[A], Tree[A]] = {
       val sortedTrees = trees.sortBy(_.element)
       sortedTrees.drop(1).zip(sortedTrees).toMap ++ trees.map(tree => findPreviousMap(tree.children)).fold(Map.empty)(_ ++ _)
@@ -148,7 +145,6 @@ object algorithm {
       sortedTrees.zip(sortedTrees.drop(1)).toMap ++ trees.map(tree => findNextMap(tree.children)).fold(Map.empty)(_ ++ _)
     }
 
-    lazy val parentMap: Map[Tree[A], Tree[A]] = trees.map(findParentMap _).fold(Map.empty)(_ ++ _)
     lazy val previousMap: Map[Tree[A], Tree[A]] = findPreviousMap(trees)
     lazy val nextMap: Map[Tree[A], Tree[A]] = findNextMap(trees)
   }
