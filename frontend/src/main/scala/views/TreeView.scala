@@ -125,14 +125,17 @@ object TreeView {
     (lhs.toString, rhs.toString)
   }
 
-  def focusAndSetCursor(elem: HTMLElement) {
+  def focusAndSetCursor(elem: HTMLElement) = if (document.activeElement != elem) {
     try {
-      elem.focus()
+      console.log("focusing elem", elem.asInstanceOf[js.Any])
       val s = window.getSelection()
       val r = document.createRange()
       r.selectNodeContents(Option(elem.firstChild).getOrElse(elem))
       r.collapse(false) // false: collapse to end, true: collapse to start
+
       s.removeAllRanges()
+      elem.focus()
+
       s.addRange(r)
     } catch { case _: Throwable => } // https://github.com/tmpvar/jsdom/issues/317
   }
@@ -140,10 +143,9 @@ object TreeView {
   def setFocus(renderHtml: RenderHtml[Tree[Post]], focusId: PostId) = {
     println("setting focus to " + focusId)
     setPostFocus = Some(() =>
-      renderHtml.nodeMap
-        .get(Tag.unwrap(focusId))
+      renderHtml.getHtmlNode(Tag.unwrap(focusId))
         .map(_.asInstanceOf[HTMLElement])
-        .map(_.getElementsByTagName("textarea")(0).asInstanceOf[HTMLElement])
+        .map(_.querySelector("""div[contenteditable="true"]:not([disabled])""").asInstanceOf[HTMLElement])
         .foreach(focusAndSetCursor)
     )
   }
@@ -154,7 +156,9 @@ object TreeView {
     onKey(event) {
       case KeyCode.Enter if !event.shiftKey =>
         val (currPostText, newPostText) = textAroundCursorSelection(elem)
-        val updatedPost = if (post.title != currPostText) Some(post.copy(title = currPostText)) else None
+        val updatedPost = if (post.title != currPostText) {
+          println("DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + currPostText)
+          Some(post.copy(title = currPostText)) }else None
         val newPost = Post.newId(newPostText)
 
         //TODO: do not create empty post, create later when there is a title
@@ -194,35 +198,35 @@ object TreeView {
           }
           false
       }
-      case KeyCode.Up if !event.shiftKey =>
+      case KeyCode.Up if !event.shiftKey && window.getSelection.rangeCount > 0 =>
         val sel = window.getSelection.getRangeAt(0)
         if (sel.collapsed && !elem.textContent.take(sel.endOffset).contains('\n')) {
           // setFocus(None)
           focusUp(elem)
           false
         } else true
-      case KeyCode.Down if !event.shiftKey =>
+      case KeyCode.Down if !event.shiftKey && window.getSelection.rangeCount > 0 =>
         val sel = window.getSelection.getRangeAt(0)
         if (sel.collapsed && !elem.textContent.drop(sel.endOffset).contains('\n')) {
           // setFocus(None)
           focusDown(elem)
           false
         } else true
-      case KeyCode.Delete if !event.shiftKey =>
+      case KeyCode.Delete if !event.shiftKey && window.getSelection.rangeCount > 0 =>
         val sel = window.getSelection.getRangeAt(0)
-        val textElem = elem.firstChild.asInstanceOf[Text]
-        if (sel.collapsed && sel.endOffset == textElem.length) {
-          treeContext.nextMap.get(tree).map { nextTree =>
+        val textElem = Option(elem.firstChild.asInstanceOf[Text])
+        if (sel.collapsed && textElem.fold(false)(text => sel.endOffset == text.length)) {
+          treeContext.nextMap.get(tree).fold(true) { nextTree =>
             val nextPost = nextTree.element
             val updatedPost = post.copy(title = post.title + " " + nextPost.title)
             state.persistence.addChanges(updatePosts = Set(updatedPost), delPosts = Set(nextPost.id))
             false
-          }.getOrElse(true)
+          }
         } else true
-      case KeyCode.Backspace if !event.shiftKey =>
+      case KeyCode.Backspace if !event.shiftKey && window.getSelection.rangeCount > 0 =>
         val sel = window.getSelection.getRangeAt(0)
         if (sel.collapsed && sel.endOffset == 0) {
-          treeContext.previousMap.get(tree).map { previousTree =>
+          treeContext.previousMap.get(tree).fold(true) { previousTree =>
             val prevPost = previousTree.element
             val (_, remainingText) = textAroundCursorSelection(elem)
             val updatedPost = prevPost.copy(title = prevPost.title + " " + remainingText)
@@ -230,7 +234,7 @@ object TreeView {
             focusUp(elem)
             state.persistence.addChanges(updatePosts = Set(updatedPost), delPosts = Set(post.id))
             false
-          }.getOrElse(true)
+          }
         } else true
     }
   }
@@ -245,6 +249,7 @@ object TreeView {
       onblur := { (event: Event) =>
         val elem = event.target.asInstanceOf[HTMLElement]
         if (post.title != elem.textContent) {
+          println("DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + elem.textContent)
           val updatedPost = post.copy(title = elem.textContent)
           state.persistence.addChanges(updatePosts = Set(updatedPost))
         }
@@ -267,7 +272,7 @@ object TreeView {
     )
   }
 
-  def newPostItem(state: GlobalState)(implicit ctx: Ctx.Owner) = {
+  def newPostItem(state: GlobalState) = {
     val area = textfield(
       "",
       onblur := { (event: Event) =>

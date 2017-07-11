@@ -21,13 +21,13 @@ import org.scalajs.dom.raw.{ Text, Element, HTMLElement, Node }
 import scalatags.JsDom.all._
 import scalatags.JsDom.TypedTag
 import scala.scalajs.js
+import scala.util.Try
 import scalatags.rx.all._
 import scala.scalajs.js.timers.setTimeout
 import org.scalajs.dom.ext.KeyCode
 import org.scalajs.dom.{ Event, KeyboardEvent }
 
 trait CanBuildHtml[T] {
-  //TODO: generic key instead of string
   def toId(t: T): String
   def toHtml(t: T, render: RenderHtml[T]): Node
   def isEqual(t1: T, t2: T): Boolean
@@ -40,22 +40,11 @@ trait CanBuildNestedHtml[T] extends CanBuildHtml[T] {
 case class RenderParent[T](element: T, renderHtml: RenderHtml[T])
 
 trait RenderHtml[T] {
-  def nodeMap: Map[String, Node]
+  //TODO: generic key instead of string
+  def getHtmlNode(id: String): Option[Node]
   def elements: Seq[T]
   def parent: Option[RenderParent[T]]
   def update(elements: Seq[T]): Unit
-
-  // def nextElement(id: String): Option[T] = elements.
-  // def prevElement(id: String): Option[T]
-
-  // private def findPreviousMap(trees: Seq[Tree[A]]): Map[Tree[A], Tree[A]] = {
-  //   val sortedTrees = trees.sortBy(_.element)
-  //   sortedTrees.drop(1).zip(sortedTrees).toMap ++ trees.map(tree => findPreviousMap(tree.children)).fold(Map.empty)(_ ++ _)
-  // }
-  // private def findNextMap(trees: Seq[Tree[A]]): Map[Tree[A], Tree[A]] = {
-  //   val sortedTrees = trees.sortBy(_.element)
-  //   sortedTrees.zip(sortedTrees.drop(1)).toMap ++ trees.map(tree => findNextMap(tree.children)).fold(Map.empty)(_ ++ _)
-  // }
 }
 
 class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: (Node, RenderParent[T]) => RenderHtml[T])(implicit canBuild: CanBuildNestedHtml[T]) extends RenderHtml[T] {
@@ -63,22 +52,54 @@ class RenderNestedHtml[T](inner: RenderHtml[T], createRenderHtml: (Node, RenderP
 
   private var members = Map.empty[String, RenderHtml[T]]
 
-  def nodeMap = inner.nodeMap
+  def getHtmlNode(id: String) = inner.getHtmlNode(id)
   def elements = inner.elements
   def parent = inner.parent
 
   def update(elements: Seq[T]): Unit = {
+    // get the dom nodes before the update
+    val previousNodeMap = elements.flatMap { elem =>
+      val id = toId(elem)
+      inner.getHtmlNode(id).map(id -> _)
+    }.toMap
+
+    // update inner html render
     inner.update(elements)
 
-    members = elements.map { elem =>
+    // for all new elements:
+    // - if element has children, create html render for children in element's dom node:
+    //    - if dom node in the inner html render has changed: create new html render for this element within the new dom node
+    //    - else: reuse existing html render
+    //    - update render for children of this element
+    members = elements.flatMap { elem =>
       val id = toId(elem)
+      val htmlNode = inner.getHtmlNode(id).get
 
-      val htmlNode = inner.nodeMap(id)
-      val parent = RenderParent[T](elem, inner)
-      val render = members.getOrElse(id, new RenderNestedHtml[T](createRenderHtml(htmlNode, parent), createRenderHtml))
-      render.update(children(elem))
+      def newHtmlRender() = {
+        println("render: new html render " + id)
+        val innerBaseHtml = div().render
+        htmlNode.appendChild(innerBaseHtml)
+        new RenderNestedHtml[T](createRenderHtml(innerBaseHtml, RenderParent[T](elem, inner)), createRenderHtml)
+      }
 
-      id -> render
+      val childElements = children(elem)
+      if (childElements.isEmpty) {
+        members.get(id).foreach(_ => htmlNode.removeChild(htmlNode.lastChild))
+        None
+      } else {
+        val render = members.get(id) match {
+          case Some(prevRender) =>
+            val prevHtmlNode = previousNodeMap.get(id)
+            val sameNode = prevHtmlNode.fold(false)(_ isSameNode htmlNode)
+            if (sameNode) prevRender
+            else newHtmlRender()
+          case None => newHtmlRender()
+        }
+
+        render.update(childElements)
+
+        Some(id -> render)
+      }
     }.toMap
   }
 }
@@ -87,21 +108,25 @@ class RenderHtmlList[T](baseHtml: Node, val parent: Option[RenderParent[T]] = No
   import canBuild._
 
   private object existing {
-    var nodeMap = Map.empty[String, Node]
+    var indexMap = Map.empty[String, Int]
     var elements = Seq.empty[T]
     var placeholder: Option[Node] = None
   }
 
-  def nodeMap = existing.nodeMap
+  def getHtmlNode(id: String) = existing.indexMap.get(id).map(baseHtml.childNodes(_))
   def elements = existing.elements
 
   def update(elements: Seq[T]): Unit = {
+    val newElementIds = elements.map(toId).toSet
+    val (remainingElements, leftOverElements) = existing.elements.partition(elem => newElementIds(toId(elem)))
+
     // remove existing elements that are missing in the new element list
-    val removedIds = existing.nodeMap.keySet filterNot elements.map(toId).toSet
-    for {
-      id <- removedIds
-      existingHtml <- existing.nodeMap.get(id)
-    } baseHtml.removeChild(existingHtml)
+    leftOverElements.map { elem =>
+      val id = toId(elem)
+      val index = existing.indexMap(id)
+      println("render: removing element " + id)
+      baseHtml.childNodes(index)
+    }.foreach(baseHtml.removeChild _)
 
     // show a placeholder if there are no elements, remove it if not neccessary anymore
     val newPlaceholder = if (elements.isEmpty) {
@@ -111,26 +136,32 @@ class RenderHtmlList[T](baseHtml: Node, val parent: Option[RenderParent[T]] = No
       None
     }
 
-    // replace existing elements if they have changed
-    val previousElements = existing.elements.collect { case element if !removedIds(toId(element)) => Some(element) }.toStream ++ Stream.continually(None)
-    val newNodeMap = (elements zip previousElements).map { case (elem, prevElem) =>
-      val elemHtml = prevElem match {
+    // for all new elements:
+    // - if there already exists an element at this index:
+    //    - if element at position has changed: replace the dom node
+    //    - else: keep existing node
+    // - else: append new node to html node
+    val newIndexMap = (elements zip remainingElements.toStream.map(Some(_)) ++ Stream.continually(None)).zipWithIndex.map { case ((elem, prevElem), index) =>
+      val id = toId(elem)
+      prevElem match {
         case Some(prevElem) =>
-          val existingHtml = existing.nodeMap(toId(prevElem))
           if (!isEqual(prevElem, elem)) {
+            println("render: replacing element " + id)
             val newHtml = toHtml(elem, this)
-            baseHtml.replaceChild(newHtml, existingHtml)
-          } else existingHtml
+            baseHtml.replaceChild(newHtml, baseHtml.childNodes(index))
+          }
         case None =>
+          println("render: new element " + id)
           val newHtml = toHtml(elem, this)
           baseHtml.appendChild(newHtml)
       }
 
-      toId(elem) -> elemHtml
+      id -> index
     }.toMap
 
+    //set new state
     existing.placeholder = newPlaceholder
-    existing.nodeMap = newNodeMap
+    existing.indexMap = newIndexMap
     existing.elements = elements
   }
 }
