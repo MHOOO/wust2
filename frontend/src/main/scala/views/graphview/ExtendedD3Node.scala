@@ -43,12 +43,20 @@ trait ExtendedD3Node extends SimulationNode {
     size = Vec2(rect.width, rect.height) / scale
     radius = size.length / 2
     centerOffset = size / -2
+    collisionRadius = radius + Constants.nodePadding * 0.5
+    collisionArea = 2 * Math.PI * collisionRadius * collisionRadius
+    containmentRadius = collisionRadius
+    containmentArea = collisionArea
   }
 
   var size: Vec2 = Vec2(0, 0)
   // def rect = pos.map { pos => AARect(pos, size) }
   var centerOffset: Vec2 = Vec2(0, 0)
   var radius: Double = 0
+  var collisionRadius: Double = 0
+  var collisionArea:Double = 0
+  var containmentRadius:Double = 0
+  var containmentArea:Double = 0
 
   var dragStart = Vec2(0, 0)
 }

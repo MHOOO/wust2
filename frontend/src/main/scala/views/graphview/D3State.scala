@@ -98,16 +98,14 @@ class RectBound {
   var width: Double = 500
   var height: Double = 500
 
-  val padding = Constants.nodePadding * 0.5
-
   def force(data: MetaForce, alpha: Double) {
     import data._
     val strength = alpha * 2
     var i2 = 0
     while (i2 < n2) {
-      val node = nodes(i2 / 2)
-      val xRadius = node.radius + padding //node.size.x / 2
-      val yRadius = node.radius + padding //node.size.y / 2
+      val i = i2 / 2
+      val xRadius = boundRadius(i) //node.size.x / 2
+      val yRadius = boundRadius(i) //node.size.y / 2
       val xPos = pos(i2) - xOffset
       val yPos = pos(i2 + 1) - yOffset
       if (xPos < xRadius) {
@@ -139,7 +137,7 @@ class KeepDistance {
       val ai = ai2 / 2
       var ax = pos(ai2)
       var ay = pos(ai2 + 1)
-      forAllPointsInCircle(quadtree, ax, ay, nodes(ai).radius + minVisibleDistance + maxRadius){ bi2 =>
+      forAllPointsInCircle(quadtree, ax, ay, radius(ai) + minVisibleDistance + maxRadius){ bi2 =>
         if (bi2 != ai2) {
           var bx = pos(bi2)
           var by = pos(bi2 + 1)
@@ -151,7 +149,7 @@ class KeepDistance {
 
           // val centerDist = (b - a).length
           val centerDist = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
-          val visibleDist = centerDist - nodes(ai).radius - nodes(bi2 / 2).radius
+          val visibleDist = centerDist - radius(ai) - radius(bi2 / 2)
           if (visibleDist < minVisibleDistance) {
             val dirx = (bx - ax) / centerDist
             val diry = (by - ay) / centerDist
@@ -191,7 +189,7 @@ class PushOutOfWrongCluster {
       forAllPointsInRect(quadtree, voronoiBoundingBox.center.x - wh, voronoiBoundingBox.center.y - hh, voronoiBoundingBox.center.x + wh, voronoiBoundingBox.center.y + hh) { ai2 =>
         val ai = ai2 / 2
         val center = Vec2(pos(ai2), pos(ai2 + 1))
-        val radius = nodes(ai).radius + minVisibleDistance
+        val radius = data.radius(ai) + minVisibleDistance
 
         val belongsToCluster = containmentClusterPostIndices(ci).contains(ai)
         if (!belongsToCluster) {
@@ -274,7 +272,7 @@ class Clustering {
       i = 0
       while (i < n) {
         val childI = children(i)
-        val targetDistance = containmentClusterMaxRadius(ci) - nodes(childI).radius
+        val targetDistance = containmentClusterMaxRadius(ci) - radius(childI)
         val targetDistanceSq = targetDistance * targetDistance
 
         val childWeight = (n - 1.0) / n
@@ -297,22 +295,22 @@ class Clustering {
           vel(parentI2) += parentDir.x
           vel(parentI2 + 1) += parentDir.y
         }
-        // else { // node is inside
-        //   val minDistance = nodes(childI).radius + Constants.nodePadding + nodes(parentI).radius
-        //   val minDistanceSq = minDistance * minDistance
-        //   if (distanceSq > minDistanceSq) {
-        //     val distanceDiff =  - minDistance- Vec2.length(dx, dy)
-        //     val velocity = distanceDiff * 0.1
-        //     val dir = Vec2(dx, dy).normalized
-        //     val childDir = dir * (velocity * alpha * childWeight)
-        //     val parentDir = dir * (velocity * alpha * parentWeight)
+        else { // node is inside
+          val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
+          val minDistanceSq = minDistance * minDistance
+          if (distanceSq > minDistanceSq) {
+            val distanceDiff =  Vec2.length(dx, dy) - minDistance
+            val velocity = distanceDiff * 0.1
+            val dir = Vec2(dx, dy).normalized
+            val childDir = dir * (velocity * alpha * childWeight)
+            val parentDir = dir * (velocity * alpha * parentWeight)
 
-        //     vel(i2) += childDir.x
-        //     vel(i2 + 1) += childDir.y
-        //     vel(parentI2) += parentDir.x
-        //     vel(parentI2 + 1) += parentDir.y
-        //   }
-        // }
+            vel(i2) += childDir.x
+            vel(i2 + 1) += childDir.y
+            vel(parentI2) += parentDir.x
+            vel(parentI2 + 1) += parentDir.y
+          }
+        }
         i += 1
       }
       ci += 1
@@ -330,7 +328,7 @@ class ConnectionDistance {
       //TODO: directly store i2 indices in connections?
       val sourceI2 = connections(i2) * 2
       val targetI2 = connections(i2 + 1) * 2
-      val targetDistance = nodes(sourceI2 / 2).radius + Constants.nodePadding + nodes(targetI2 / 2).radius
+      val targetDistance = radius(sourceI2/2) + Constants.nodePadding + radius(targetI2/2)
       val targetDistanceSq = targetDistance * targetDistance // TODO: cache in array
       val dx = pos(sourceI2) - pos(targetI2)
       val dy = pos(sourceI2 + 1) - pos(targetI2 + 1)
@@ -384,6 +382,8 @@ class MetaForce extends CustomForce[SimPost] {
   var nodes = js.Array[SimPost]()
   var pos: js.Array[Double] = js.Array()
   var vel: js.Array[Double] = js.Array()
+  var radius: js.Array[Double] = js.Array()
+  var boundRadius: js.Array[Double] = js.Array()
   //TODO: var radii
   var indices: js.Array[Int] = js.Array()
   var quadtree: Quadtree[Int] = d3.quadtree()
@@ -413,6 +413,7 @@ class MetaForce extends CustomForce[SimPost] {
         n2 = 2 * n
         pos = new js.Array(n2)
         vel = new js.Array(n2)
+        radius = new js.Array(n)
         indices = (0 until n2 by 2).toJSArray
       }
     }
@@ -452,9 +453,22 @@ class MetaForce extends CustomForce[SimPost] {
 
   def updatedNodeSizes() {
     /*time("updateNodeSizes")*/ {
-      containmentClusterMaxRadius = containmentClusters.map{ c =>
-        c.recalculateMaxRadius()
-        c.maxRadius
+      i = 0
+      radius = new js.Array(n)
+      boundRadius = new js.Array(n)
+      while(i < n) {
+        radius(i) = nodes(i).radius
+        boundRadius(i) = nodes(i).containmentRadius
+        i += 1
+      }
+
+      val cn = containmentClusters.size
+      containmentClusterMaxRadius = new js.Array(cn)
+      i = 0
+      while(i < cn) {
+        val c = containmentClusters(i)
+        containmentClusterMaxRadius(i) = c.parent.containmentRadius
+        i += 1
       }
 
       updateClusterConvexHulls()
@@ -515,7 +529,7 @@ class MetaForce extends CustomForce[SimPost] {
           pos(i2 + 1) = nodes(i).y.get
           vel(i2) = nodes(i).vx.get
           vel(i2 + 1) = nodes(i).vy.get
-          maxRadius = maxRadius max nodes(i).radius
+          maxRadius = maxRadius max radius(i)
           i += 1
           i2 += 2
         }

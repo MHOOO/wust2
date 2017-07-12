@@ -131,11 +131,9 @@ class GraphState(val state: GlobalState)(implicit ctx: Ctx.Owner) {
     val graph = rxDisplayGraph().graph
     val postIdToSimPost = rxPostIdToSimPost()
 
-    val parents: Seq[PostId] = graph.containments.map(_.parentId)(breakOut).distinct
-
     // due to transitive containment visualisation,
     // inner posts should be drawn above outer ones.
-    val ordered = parents.topologicalSortBy(graph.children)
+    val ordered = graph.allParentIdsTopologicallySortedByChildren
 
     ordered.map { p =>
       new ContainmentCluster(

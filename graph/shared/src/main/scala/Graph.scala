@@ -73,6 +73,10 @@ package object graph {
     lazy val groupIds: Iterable[GroupId] = groupsById.keys
     lazy val users: Iterable[User] = usersById.values
     lazy val userIds: Iterable[UserId] = usersById.keys
+    lazy val postIdsTopologicalSortedByChildren:Iterable[PostId] = postIds.topologicalSortBy(children)
+    lazy val allParentIds: Set[PostId] = containments.map(_.parentId)
+    lazy val allParentIdsTopologicallySortedByChildren:Iterable[PostId] = allParentIds.topologicalSortBy(children)
+    lazy val allParentIdsTopologicallySortedByParents:Iterable[PostId] = allParentIds.topologicalSortBy(parents) //TODO: ..ByChildren.reverse?
 
     override def toString =
       s"Graph(${posts.map(_.id).mkString(" ")},${connections.map(c => s"${c.sourceId}->${c.targetId}").mkString(", ")}, ${containments.map(c => s"${c.parentId}⊂${c.childId}").mkString(", ")},groups:${groupIds}, ownerships: ${ownerships.map(o => s"${o.postId} -> ${o.groupId}").mkString(", ")}, users: ${userIds}, memberships: ${memberships.map(o => s"${o.userId} -> ${o.groupId}").mkString(", ")})"

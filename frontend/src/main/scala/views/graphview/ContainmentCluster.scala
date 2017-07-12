@@ -44,23 +44,6 @@ class ContainmentCluster(val parent: SimPost, val children: IndexedSeq[SimPost],
   }
 
   recalculateConvexHull()
-
-  private var _maxRadius: Double = 1.0
-  def maxRadius = _maxRadius
-
-  def recalculateMaxRadius() {
-    var maxR = 0.0
-    val area = children.map{ p =>
-      val radius = p.radius + Constants.nodePadding * 0.5
-      maxR = maxR max p.radius
-      val radiusOfBoundingCircleOfBoundingSquare = radius * Math.sqrt(2)
-      val boundingCircleArea = 2 * Math.PI * radiusOfBoundingCircleOfBoundingSquare * radiusOfBoundingCircleOfBoundingSquare
-      boundingCircleArea
-    }.sum
-    val radius = Math.sqrt(area / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
-    val boundingRadius = radius // * Math.sqrt(2) // radius of bounding circle of bounding square
-    _maxRadius = boundingRadius max (parent.radius + Constants.nodePadding + maxR*2) // so that the largest node still fits in the bounding radius of the cluster
-  }
 }
 
 object ContainmentClusterSelection extends DataSelection[ContainmentCluster] {
@@ -123,6 +106,6 @@ object ContainmentClusterBoundingRadiusSelection extends DataSelection[Containme
   override def draw(cluster: Selection[ContainmentCluster]) {
     cluster
       .style("transform", (c: ContainmentCluster) => s"translate(${c.parent.x.get}px,${c.parent.y.get}px)")
-      .attr("r", (c: ContainmentCluster) => c.maxRadius)
+      .attr("r", (c: ContainmentCluster) => c.parent.containmentRadius)
   }
 }
