@@ -6,6 +6,7 @@ import rx._, rxext._
 import wust.frontend._
 import wust.util.collection._
 import wust.util.EventTracker.sendEvent
+import wust.frontend.Color._
 
 import scalatags.JsDom.all._
 import collection.breakOut
@@ -106,13 +107,13 @@ class PostRadiusSelection(graphState: GraphState, d3State: D3State) extends Data
   }
 }
 
-class PostPaddingRadiusSelection(graphState: GraphState, d3State: D3State) extends DataSelection[SimPost] {
+object PostCollisionRadiusSelection extends DataSelection[SimPost] {
   override val tag = "circle"
   override def update(post: Selection[SimPost]) {
     post
       .attr("stroke", "#666")
       .attr("fill", "transparent")
-      .attr("stroke-dasharray", "10,10")
+      .attr("stroke-dasharray", "7,7")
   }
 
   override def draw(post: Selection[SimPost]) {
@@ -122,3 +123,19 @@ class PostPaddingRadiusSelection(graphState: GraphState, d3State: D3State) exten
   }
 }
 
+object PostContainmentRadiusSelection extends DataSelection[SimPost] {
+  override val tag = "circle"
+  override def update(cluster: Selection[SimPost]) {
+    cluster
+      .attr("stroke", (simPost: SimPost) => baseColor(simPost.id))
+      .attr("fill", "transparent")
+      .attr("stroke-dasharray", "10,10")
+  }
+
+  override def draw(simPost: Selection[SimPost]) {
+    simPost
+      .style("transform", (c: SimPost) => s"translate(${c.x.get}px,${c.y.get}px)")
+      .attr("r", (p: SimPost) => p.containmentRadius)
+      .style("stroke-width", (p:SimPost) => if(p.collisionRadius != p.containmentRadius) "3px" else "0px")
+  }
+}

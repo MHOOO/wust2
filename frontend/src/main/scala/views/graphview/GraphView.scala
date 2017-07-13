@@ -68,8 +68,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   val redirectedConnectionLineSelection = SelectData.rx(RedirectedConnectionLineSelection, rxSimRedirectedConnection)(svg.append("g"))
   // useful for simulation debugging: (also uncomment in draw())
   val postRadiusSelection = SelectData.rx(new PostRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
-  val postPaddingRadiusSelection = SelectData.rx(new PostPaddingRadiusSelection(graphState, d3State), rxSimPosts)(svg.append("g"))
-  val containmentClusterBoundingRadius = SelectData.rx(ContainmentClusterBoundingRadiusSelection, rxContainmentCluster)(svg.append("g"))
+  val postCollisionRadiusSelection = SelectData.rx(PostCollisionRadiusSelection, rxSimPosts)(svg.append("g"))
+  val postContainmentRadiusSelection = SelectData.rx(PostContainmentRadiusSelection, rxSimPosts)(svg.append("g"))
 
   val html = container.append("div")
   val connectionElementSelection = SelectData.rx(new ConnectionElementSelection(graphState), rxSimConnection)(html.append("div"))
@@ -182,11 +182,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       val rect = container.node.asInstanceOf[HTMLElement].getBoundingClientRect
       val width = rect.width
       val height = rect.height
-      try { rawPostSelection.recalculateNodeSizes(postSelection.container.asInstanceOf[Selection[SimPost]]) } catch { case e => }
       if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
         DevPrintln("    updating bounds and zoom")
-        val postsArea = rxSimPosts.now.map( _.containmentArea ).sum
-        val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
+        val graph = rxDisplayGraph.now.graph
+        val parentsArea = graph.allParentIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
+        val isolatedArea = graph.containmentIsolatedPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
+        val postsArea = parentsArea + isolatedArea
+        val scale = ((width * height) / (postsArea)) min 1.5
 
         svg.call(d3State.zoom.transform _, d3.zoomIdentity
           .translate(width / 2, height / 2)
@@ -242,9 +244,15 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.redirectedConnection.initialize(rxSimPosts.now)
     d3State.forces.containment.initialize(rxSimPosts.now)
     d3State.forces.collapsedContainment.initialize(rxSimPosts.now)
-    d3State.forces.meta.updatedNodeSizes()
     rxContainmentCluster.now.foreach(_.recalculateConvexHull())
 
+    calculateRecursiveContainmentRadii()
+    d3State.forces.meta.updatedNodeSizes()
+    recalculateBoundsAndZoom()
+  }
+
+  def calculateRecursiveContainmentRadii() {
+  
     def circleAreaToRadius(a:Double) = Math.sqrt(a / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
 
     val graph  = rxDisplayGraph.now.graph
@@ -259,9 +267,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       }.sum
       val area = post.containmentArea + childrenArea
       val radius = circleAreaToRadius(area)
-      post.containmentRadius = radius max (post.containmentRadius + Constants.nodePadding + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
+      if(childRadiusMax > 0.0)
+        post.containmentRadius = radius max (post.containmentRadius + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
+      else
+        post.containmentRadius = radius
       post.containmentArea = circleAreaToRadius(post.containmentRadius)
     }
+
   }
 
   private def onPostDrag() {
@@ -331,8 +343,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
 
     // debug draw:
     postRadiusSelection.draw()
-    postPaddingRadiusSelection.draw()
-    containmentClusterBoundingRadius.draw()
+    postCollisionRadiusSelection.draw()
+    postContainmentRadiusSelection.draw()
   }
 
   private def initContainerDimensionsAndPositions() {

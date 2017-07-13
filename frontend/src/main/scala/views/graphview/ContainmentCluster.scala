@@ -93,19 +93,3 @@ object CollapsedContainmentClusterSelection extends DataSelection[ContainmentClu
   }
 }
 
-object ContainmentClusterBoundingRadiusSelection extends DataSelection[ContainmentCluster] {
-  override val tag = "circle"
-  override def update(cluster: Selection[ContainmentCluster]) {
-    cluster
-      .attr("stroke", (cluster: ContainmentCluster) => baseColor(cluster.parent.id))
-      .style("stroke-width", "3px")
-      .attr("fill", "transparent")
-      .attr("stroke-dasharray", "10,10")
-  }
-
-  override def draw(cluster: Selection[ContainmentCluster]) {
-    cluster
-      .style("transform", (c: ContainmentCluster) => s"translate(${c.parent.x.get}px,${c.parent.y.get}px)")
-      .attr("r", (c: ContainmentCluster) => c.parent.containmentRadius)
-  }
-}
