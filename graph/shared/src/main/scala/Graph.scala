@@ -74,6 +74,7 @@ package object graph {
     lazy val users: Iterable[User] = usersById.values
     lazy val userIds: Iterable[UserId] = usersById.keys
     lazy val postIdsTopologicalSortedByChildren:Iterable[PostId] = postIds.topologicalSortBy(children)
+    lazy val postIdsTopologicalSortedByParents:Iterable[PostId] = postIds.topologicalSortBy(parents)
     lazy val allParentIds: Set[PostId] = containments.map(_.parentId)
     lazy val allParentIdsTopologicallySortedByChildren:Iterable[PostId] = allParentIds.topologicalSortBy(children)
     lazy val allParentIdsTopologicallySortedByParents:Iterable[PostId] = allParentIds.topologicalSortBy(parents) //TODO: ..ByChildren.reverse?

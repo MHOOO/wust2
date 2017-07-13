@@ -185,7 +185,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       try { rawPostSelection.recalculateNodeSizes(postSelection.container.asInstanceOf[Selection[SimPost]]) } catch { case e => }
       if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
         DevPrintln("    updating bounds and zoom")
-        val postsArea = rxSimPosts.now.map( _.squareArea ).sum
+        val postsArea = rxSimPosts.now.map( _.containmentArea ).sum
         val scale = (sqrt(width * height) / sqrt(postsArea)) min 1.5
 
         svg.call(d3State.zoom.transform _, d3.zoomIdentity
@@ -245,21 +245,23 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.meta.updatedNodeSizes()
     rxContainmentCluster.now.foreach(_.recalculateConvexHull())
 
+    def circleAreaToRadius(a:Double) = Math.sqrt(a / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
+
     val graph  = rxDisplayGraph.now.graph
     for( postId <- graph.postIdsTopologicalSortedByParents ) {
       val post = rxPostIdToSimPost.now(postId)
       val children = graph.children(postId)
       var childRadiusMax = 0.0
-      val childArea = children.map{ childId =>
+      val childrenArea = children.map{ childId =>
         val child = rxPostIdToSimPost.now(childId)
         childRadiusMax = childRadiusMax max child.containmentRadius
-        child.squareArea
+        child.containmentArea
       }.sum
-      val area = post.squareArea + childArea
-      val radius = Math.sqrt(area / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
-      post.containmentRadius = radius max (post.radius + Constants.nodePadding + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
+      val area = post.containmentArea + childrenArea
+      val radius = circleAreaToRadius(area)
+      post.containmentRadius = radius max (post.containmentRadius + Constants.nodePadding + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
+      post.containmentArea = circleAreaToRadius(post.containmentRadius)
     }
-  }
   }
 
   private def onPostDrag() {
