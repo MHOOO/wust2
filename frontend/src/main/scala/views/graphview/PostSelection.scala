@@ -136,6 +136,6 @@ object PostContainmentRadiusSelection extends DataSelection[SimPost] {
     simPost
       .style("transform", (c: SimPost) => s"translate(${c.x.get}px,${c.y.get}px)")
       .attr("r", (p: SimPost) => p.containmentRadius)
-      .style("stroke-width", (p:SimPost) => if(p.collisionRadius != p.containmentRadius) "3px" else "0px")
+      .style("stroke-width", (p:SimPost) => if(p.collisionRadius != p.containmentRadius) "6px" else "0px")
   }
 }

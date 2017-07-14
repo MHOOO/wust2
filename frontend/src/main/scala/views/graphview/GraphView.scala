@@ -185,10 +185,13 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
         DevPrintln("    updating bounds and zoom")
         val graph = rxDisplayGraph.now.graph
-        val parentsArea = graph.allParentIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
-        val isolatedArea = graph.containmentIsolatedPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
-        val postsArea = parentsArea + isolatedArea
-        val scale = ((width * height) / (postsArea)) min 1.5
+        DevPrintln(graph.allParentIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).toString)
+        DevPrintln(rxSimPosts.now.map(_.collisionArea ).toString)
+        // val postsArea = graph.toplevelPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
+        val postsArea = rxSimPosts.now.map(_.collisionArea ).sum
+        val scale = sqrt((width * height) / postsArea)// min 1.5   // scale = sqrt(ratio) because areas grow quadratically
+        DevPrintln(s"    parentsArea: $postsArea, window: ${width * height}")
+        DevPrintln(s"    scale: $scale")
 
         svg.call(d3State.zoom.transform _, d3.zoomIdentity
           .translate(width / 2, height / 2)
@@ -254,6 +257,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   def calculateRecursiveContainmentRadii() {
   
     def circleAreaToRadius(a:Double) = Math.sqrt(a / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
+    def circleArea(r:Double) = 2*Math.PI*r*r
 
     val graph  = rxDisplayGraph.now.graph
     for( postId <- graph.postIdsTopologicalSortedByParents ) {
@@ -271,7 +275,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         post.containmentRadius = radius max (post.containmentRadius + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
       else
         post.containmentRadius = radius
-      post.containmentArea = circleAreaToRadius(post.containmentRadius)
+      post.containmentArea = circleArea(post.containmentRadius)
     }
 
   }

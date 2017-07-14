@@ -491,7 +491,7 @@ class MetaForce extends CustomForce[SimPost] {
   var updatedInvalidPosition = false
 
   override def force(alpha: Double) {
-    time("simulation frame") {
+    /*time("simulation frame")*/ {
       /*time("\nforce.init")*/ {
         maxRadius = 0.0
         //read pos + vel from simpost
