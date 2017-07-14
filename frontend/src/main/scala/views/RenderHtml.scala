@@ -118,10 +118,10 @@ class RenderHtmlList[T](baseHtml: Node, val parent: Option[RenderParent[T]] = No
 
   def update(elements: Seq[T]): Unit = {
     val newElementIds = elements.map(toId).toSet
-    val (remainingElements, leftOverElements) = existing.elements.partition(elem => newElementIds(toId(elem)))
+    val (remainingElements, removedElements) = existing.elements.partition(elem => newElementIds(toId(elem)))
 
     // remove existing elements that are missing in the new element list
-    leftOverElements.map { elem =>
+    removedElements.map { elem =>
       val id = toId(elem)
       val index = existing.indexMap(id)
       println("render: removing element " + id)
@@ -148,7 +148,10 @@ class RenderHtmlList[T](baseHtml: Node, val parent: Option[RenderParent[T]] = No
           if (!isEqual(prevElem, elem)) {
             println("render: replacing element " + id)
             val newHtml = toHtml(elem, this)
-            baseHtml.replaceChild(newHtml, baseHtml.childNodes(index))
+            val currHtml = baseHtml.childNodes(index)
+            Try(baseHtml.replaceChild(newHtml, currHtml)).failed.foreach { _ =>
+              console.error("render wtf")
+            }
           }
         case None =>
           println("render: new element " + id)

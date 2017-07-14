@@ -35,6 +35,7 @@ object TreeView {
   }
 
   private var setPostFocus: Option[() => Unit] = None
+
   private var treeContext: TreeContext[Post] = new TreeContext[Post]()
 
   // preserves newlines and white spaces: white-space: pre
@@ -128,15 +129,15 @@ object TreeView {
   def focusAndSetCursor(elem: HTMLElement) = if (document.activeElement != elem) {
     try {
       console.log("focusing elem", elem.asInstanceOf[js.Any])
-      val s = window.getSelection()
-      val r = document.createRange()
-      r.selectNodeContents(Option(elem.firstChild).getOrElse(elem))
-      r.collapse(false) // false: collapse to end, true: collapse to start
+      // val s = window.getSelection()
+      // val r = document.createRange()
+      // r.selectNodeContents(Option(elem.firstChild).getOrElse(elem))
+      // r.collapse(false) // false: collapse to end, true: collapse to start
 
-      s.removeAllRanges()
       elem.focus()
 
-      s.addRange(r)
+      // s.removeAllRanges()
+      // s.addRange(r)
     } catch { case _: Throwable => } // https://github.com/tmpvar/jsdom/issues/317
   }
 
@@ -157,7 +158,7 @@ object TreeView {
       case KeyCode.Enter if !event.shiftKey =>
         val (currPostText, newPostText) = textAroundCursorSelection(elem)
         val updatedPost = if (post.title != currPostText) {
-          println("DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + currPostText)
+          println("ENTER DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + currPostText)
           Some(post.copy(title = currPostText)) }else None
         val newPost = Post.newId(newPostText)
 
@@ -248,10 +249,15 @@ object TreeView {
       },
       onblur := { (event: Event) =>
         val elem = event.target.asInstanceOf[HTMLElement]
-        if (post.title != elem.textContent) {
-          println("DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + elem.textContent)
-          val updatedPost = post.copy(title = elem.textContent)
-          state.persistence.addChanges(updatePosts = Set(updatedPost))
+
+        // get the post from the state, as post var here might be outdated
+        // this can happen when we then blur handler is called while rendering the new elements
+        state.rawGraph.now.postsById.get(post.id).foreach { currPost =>
+          if (currPost.title != elem.textContent) {
+            println("BLUR DIFFERENCE DETECTED: " + "old: " + post.title + ", new: " + elem.textContent)
+            val updatedPost = post.copy(title = elem.textContent)
+            state.persistence.addChanges(updatePosts = Set(updatedPost))
+          }
         }
       },
       onkeydown := { (e: KeyboardEvent) =>
@@ -260,6 +266,7 @@ object TreeView {
     ).render
 
     div(
+      name := Tag.unwrap(post.id),
       paddingLeft := "10px",
       div(
         display.flex,
@@ -331,7 +338,7 @@ object TreeView {
 
       renderHtml.update(trees)
 
-      setTimeout(60)(setPostFocus.foreach(_()))
+      setPostFocus.foreach(_())
     }
 
     div(content)
