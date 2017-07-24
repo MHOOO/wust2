@@ -185,11 +185,11 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
       if (width > 0 && height > 0 && rxSimPosts.now.size > 0 && rxSimPosts.now.head.radius > 0) {
         DevPrintln("    updating bounds and zoom")
         val graph = rxDisplayGraph.now.graph
-        DevPrintln(graph.allParentIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).toString)
-        DevPrintln(rxSimPosts.now.map(_.collisionArea ).toString)
+        DevPrintln(graph.allParentIds.map(postId => rxPostIdToSimPost.now(postId).containmentArea).toString)
+        DevPrintln(rxSimPosts.now.map(_.collisionArea).toString)
         // val postsArea = graph.toplevelPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
-        val postsArea = rxSimPosts.now.map(_.collisionArea ).sum
-        val scale = sqrt((width * height) / postsArea)// min 1.5   // scale = sqrt(ratio) because areas grow quadratically
+        val postsArea = rxSimPosts.now.map(_.collisionArea).sum * 2 // 2 is an arbitrary factor
+        val scale = sqrt((width * height) / postsArea) // min 1.5   // scale = sqrt(ratio) because areas grow quadratically
         DevPrintln(s"    parentsArea: $postsArea, window: ${width * height}")
         DevPrintln(s"    scale: $scale")
 
@@ -255,29 +255,34 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
   }
 
   def calculateRecursiveContainmentRadii() {
-  
-    def circleAreaToRadius(a:Double) = Math.sqrt(a / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
-    def circleArea(r:Double) = 2*Math.PI*r*r
+    DevPrintln("       calculateRecursiveContainmentRadii")
+    def circleAreaToRadius(a: Double) = Math.sqrt(a / (2 * Math.PI)) // a = 2*PI*r^2 solved by r
+    def circleArea(r: Double) = 2 * Math.PI * r * r
 
-    val graph  = rxDisplayGraph.now.graph
-    for( postId <- graph.postIdsTopologicalSortedByParents ) {
+    val graph = rxDisplayGraph.now.graph
+    for (postId <- graph.postIdsTopologicalSortedByParents) {
       val post = rxPostIdToSimPost.now(postId)
       val children = graph.children(postId)
       var childRadiusMax = 0.0
       val childrenArea = children.map{ childId =>
         val child = rxPostIdToSimPost.now(childId)
-        childRadiusMax = childRadiusMax max child.containmentRadius
+        if (child.containmentRadius > childRadiusMax) {
+          childRadiusMax = child.containmentRadius
+          println(s"max: $childRadiusMax by ${child.title}")
+        }
         child.containmentArea
       }.sum
-      val area = post.containmentArea + childrenArea
-      val radius = circleAreaToRadius(area)
-      if(childRadiusMax > 0.0)
-        post.containmentRadius = radius max (post.containmentRadius + childRadiusMax*2) // so that the largest node still fits in the bounding radius of the cluster
-      else
-        post.containmentRadius = radius
-      post.containmentArea = circleArea(post.containmentRadius)
-    }
 
+      println(s"sum: $childrenArea")
+
+      if (childrenArea > 0.0) {
+        // val neededArea = post.containmentArea + childrenArea
+        // println(s"neededArea = ${post.containmentArea} + ${childrenArea} = $neededArea")
+        val neededRadius = post.containmentRadius + childRadiusMax * 2 // so that the largest node still fits in the bounding radius of the cluster
+        post.containmentRadius = neededRadius//circleAreaToRadius(neededArea) //max neededRadius
+        post.containmentArea = circleArea(post.containmentRadius)
+      }
+    }
   }
 
   private def onPostDrag() {

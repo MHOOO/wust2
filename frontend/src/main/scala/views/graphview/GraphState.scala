@@ -47,10 +47,10 @@ class GraphState(val state: GlobalState)(implicit ctx: Ctx.Owner) {
         } else
           "2px solid rgba(0,0,0,0.2)" // no children
 
-      sp.fontSize = if (hasChildren) {
+      sp.fontSize = /*if (hasChildren) {
         val factor = fontSizeByDepth(rawGraph.parentDepth(p.id)) * fontSizeByTransitiveChildren(rawGraph.transitiveChildren(p.id).size)
         s"${factor * 100.0}%"
-      } else "100%"
+      } else*/ "100%"
 
       sp.color = (
         //TODO collapsedPostIds is not sufficient for being a parent (but currently no knowledge about collapsed children in graph)

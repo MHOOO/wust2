@@ -100,20 +100,20 @@ class RectBound {
 
   def force(data: MetaForce, alpha: Double) {
     import data._
-    def pushIntoBounds(i2:Int, xRadius:Double, yRadius:Double, strength:Double) {
+    def pushIntoBounds(i2:Int, xRadius:Double, yRadius:Double, strength:Double, maxStrength:Double = Double.PositiveInfinity) {
       val xPos = pos(i2) - xOffset
       val yPos = pos(i2 + 1) - yOffset
       if (xPos < xRadius) {
-        vel(i2) += (xRadius - xPos) * strength
+        vel(i2) += ((xRadius - xPos) min maxStrength) * strength
       }
       if (yPos < yRadius) {
-        vel(i2 + 1) += (yRadius - yPos) * strength
+        vel(i2 + 1) += ((yRadius - yPos) min maxStrength) * strength
       }
       if (xPos > width - xRadius) {
-        vel(i2) += ((width - xRadius) - xPos) * strength
+        vel(i2) += (((width - xRadius) - xPos) max -maxStrength) * strength
       }
       if (yPos > height - yRadius) {
-        vel(i2 + 1) += ((height - yRadius) - yPos) * strength
+        vel(i2 + 1) += (((height - yRadius) - yPos) max -maxStrength) * strength
       }
     }
 
@@ -121,7 +121,7 @@ class RectBound {
     while (i2 < n2) {
       val i = i2 / 2
       pushIntoBounds(i2, collisionRadius(i), collisionRadius(i), strength = alpha * 2)
-      pushIntoBounds(i2, containmentRadius(i), containmentRadius(i), strength = alpha * 0.5)
+      pushIntoBounds(i2, containmentRadius(i), containmentRadius(i), strength = alpha * 0.5, maxStrength = collisionRadius(i))
       i2 += 2
     }
   }
@@ -300,22 +300,22 @@ class Clustering {
           vel(parentI2) += parentDir.x
           vel(parentI2 + 1) += parentDir.y
         }
-        else { // node is inside
-          val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
-          val minDistanceSq = minDistance * minDistance
-          if (distanceSq > minDistanceSq) {
-            val distanceDiff =  Vec2.length(dx, dy) - minDistance
-            val velocity = distanceDiff * innerVelocityFactor
-            val dir = Vec2(dx, dy).normalized
-            val childDir = dir * (velocity * alpha * childWeight)
-            val parentDir = dir * (velocity * alpha * parentWeight)
+        // else { // node is inside
+        //   val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
+        //   val minDistanceSq = minDistance * minDistance
+        //   if (distanceSq > minDistanceSq) {
+        //     val distanceDiff =  Vec2.length(dx, dy) - minDistance
+        //     val velocity = distanceDiff * innerVelocityFactor
+        //     val dir = Vec2(dx, dy).normalized
+        //     val childDir = dir * (velocity * alpha * childWeight)
+        //     val parentDir = dir * (velocity * alpha * parentWeight)
 
-            vel(i2) += childDir.x
-            vel(i2 + 1) += childDir.y
-            vel(parentI2) += parentDir.x
-            vel(parentI2 + 1) += parentDir.y
-          }
-        }
+        //     vel(i2) += childDir.x
+        //     vel(i2 + 1) += childDir.y
+        //     vel(parentI2) += parentDir.x
+        //     vel(parentI2 + 1) += parentDir.y
+        //   }
+        // }
         i += 1
       }
       ci += 1
