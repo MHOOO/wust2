@@ -132,33 +132,33 @@ class KeepDistance {
 
   val minVisibleDistance = Constants.nodePadding
 
-  def force(data: MetaForce, alpha: Double) {
+  def force(data: MetaForce, alpha: Double, distance:Double, strength:Double = 1.0) {
     import data._
     var ai2 = 0
     while (ai2 < n2) {
       val ai = ai2 / 2
       var ax = pos(ai2)
       var ay = pos(ai2 + 1)
-      forAllPointsInCircle(quadtree, ax, ay, radius(ai) + minVisibleDistance + maxRadius){ bi2 =>
+      forAllPointsInCircle(quadtree, ax, ay, radius(ai) + distance + maxRadius){ bi2 =>
         if (bi2 != ai2) {
           var bx = pos(bi2)
           var by = pos(bi2 + 1)
 
           if (ax == bx && ay == by) {
-            ax += minVisibleDistance * 0.5 + jitter
-            bx -= minVisibleDistance * 0.5 + jitter
+            ax += distance * 0.5 + jitter
+            bx -= distance * 0.5 + jitter
           }
 
           // val centerDist = (b - a).length
           val centerDist = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
           val visibleDist = centerDist - radius(ai) - radius(bi2 / 2)
-          if (visibleDist < minVisibleDistance) {
+          if (visibleDist < distance) {
             val dirx = (bx - ax) / centerDist
             val diry = (by - ay) / centerDist
-            val strength = (minVisibleDistance - visibleDist) * 0.5 * alpha // the other half goes to the other node
+            val factor = (distance - visibleDist) * 0.5 * alpha * strength // the other half goes to the other node
 
-            vel(bi2) += dirx * strength
-            vel(bi2 + 1) += diry * strength
+            vel(bi2) += dirx * factor
+            vel(bi2 + 1) += diry * factor
           }
           // }
         }
@@ -543,7 +543,8 @@ class MetaForce extends CustomForce[SimPost] {
       // apply forces
       // /*time("gravity")*/ { gravity.force(this, alpha) }
       /*time("rectBound")*/ { rectBound.force(this, alpha) }
-      /*time("keepDistance")*/ { keepDistance.force(this, alpha) }
+      /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding) }
+      /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding*3, strength = 0.1) }
       /*time("clustering")*/ { clustering.force(this, alpha) }
       /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
       /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
@@ -642,7 +643,7 @@ object InitialPosition {
 object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = {
     val alphaMin = 0.7 // stop simulation earlier (default = 0.001)
-    val ticks = 20 // Default = 300
+    val ticks = 100 // Default = 300
     d3.forceSimulation[SimPost]()
       .alphaMin(alphaMin)
       .alphaDecay(1 - Math.pow(alphaMin, (1.0 / ticks)))

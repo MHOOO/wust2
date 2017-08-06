@@ -44,9 +44,7 @@ trait ExtendedD3Node extends SimulationNode {
     radius = size.length / 2
     centerOffset = size / -2
     collisionRadius = radius + Constants.nodePadding * 0.5
-    collisionArea = 2 * Math.PI * collisionRadius * collisionRadius
     containmentRadius = collisionRadius
-    containmentArea = collisionArea
   }
 
   var size: Vec2 = Vec2(0, 0)
@@ -54,9 +52,11 @@ trait ExtendedD3Node extends SimulationNode {
   var centerOffset: Vec2 = Vec2(0, 0)
   var radius: Double = 0
   var collisionRadius: Double = 0
-  var collisionArea:Double = 0
+  def collisionArea:Double = Math.PI * collisionRadius * collisionRadius
+  def collisionBoundingSquareArea:Double = 4 * collisionRadius * collisionRadius
   var containmentRadius:Double = 0
-  var containmentArea:Double = 0
+  def containmentArea:Double = Math.PI * containmentRadius * containmentRadius
+  def containmentBoundingSquareArea:Double = Math.PI * containmentRadius * containmentRadius
 
   var dragStart = Vec2(0, 0)
 }
