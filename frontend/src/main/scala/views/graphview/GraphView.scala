@@ -188,9 +188,9 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         // DevPrintln(graph.allParentIds.map(postId => rxPostIdToSimPost.now(postId).containmentArea).toString)
         // DevPrintln(rxSimPosts.now.map(_.collisionArea).toString)
         // val postsArea = graph.toplevelPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
-        val arbitraryFactor = 1
+        val arbitraryFactor = 1.3
         val postsArea = rxSimPosts.now.foldLeft(0.0)((sum,post) => sum + post.collisionBoundingSquareArea) * arbitraryFactor
-        val scale = sqrt((width * height) / postsArea) // min 1.5   // scale = sqrt(ratio) because areas grow quadratically
+        val scale = sqrt((width * height) / postsArea)  min 1.5   // scale = sqrt(ratio) because areas grow quadratically
         // DevPrintln(s"    parentsArea: $postsArea, window: ${width * height}")
         // DevPrintln(s"    scale: $scale")
 
@@ -275,7 +275,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
             println(s"max: $childRadiusMax by ${child.title}")
           }
           // sum + child.containmentArea
-          sum + child.containmentBoundingSquareArea * 1.5 // 1.5 is arbitrary to have more space
+          val arbitraryFactor = 1.5 // 1.5 is arbitrary to have more space
+          sum + child.containmentBoundingSquareArea * arbitraryFactor
         }
 
         println(s"need children: ${children} ${children.map(rxPostIdToSimPost.now).map(_.containmentArea)}")

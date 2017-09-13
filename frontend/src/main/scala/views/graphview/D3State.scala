@@ -121,7 +121,7 @@ class RectBound {
     while (i2 < n2) {
       val i = i2 / 2
       pushIntoBounds(i2, collisionRadius(i), collisionRadius(i), strength = alpha * 2)
-      pushIntoBounds(i2, containmentRadius(i), containmentRadius(i), strength = alpha * 0.5, maxStrength = collisionRadius(i))
+      // pushIntoBounds(i2, containmentRadius(i), containmentRadius(i), strength = alpha * 0.1, maxStrength = collisionRadius(i))
       i2 += 2
     }
   }
@@ -156,9 +156,11 @@ class KeepDistance {
             val dirx = (bx - ax) / centerDist
             val diry = (by - ay) / centerDist
             val factor = (distance - visibleDist) * 0.5 * alpha * strength // the other half goes to the other node
-
-            vel(bi2) += dirx * factor
-            vel(bi2 + 1) += diry * factor
+            if(!containmentTest(bi2/2)(ai)) { // parents can push children, and children each other
+              // TODO: also disallow pushing of transitive parents?
+              vel(bi2) += dirx * factor
+              vel(bi2 + 1) += diry * factor
+            }
           }
           // }
         }
@@ -277,7 +279,7 @@ class Clustering {
       i = 0
       while (i < n) {
         val childI = children(i)
-        val targetDistance = containmentRadius(parentI) - containmentRadius(childI)
+        val targetDistance = containmentRadius(parentI) - containmentRadius(childI) // stop when completely inside the containmentRadius circle
         val targetDistanceSq = targetDistance * targetDistance
 
         val childWeight = n / (n+1.0)
@@ -287,6 +289,7 @@ class Clustering {
         val dx = pos(parentI2) - pos(i2)
         val dy = pos(parentI2 + 1) - pos(i2 + 1)
         val distanceSq = Vec2.lengthSq(dx, dy)
+        // be aware: >= produces NaNs
         if (distanceSq > targetDistanceSq) { // node is outside
           //TODO: avoid Vec2 allocation and sqrt
           val distanceDiff = Vec2.length(dx, dy) - targetDistance
@@ -303,10 +306,11 @@ class Clustering {
           }
         }
         else { // node is inside
-          val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
-          val minDistanceSq = minDistance * minDistance
-          if (distanceSq > minDistanceSq) {
-            val distanceDiff =  Vec2.length(dx, dy) - minDistance
+        // val targetDistance = collisionRadius(parentI) + (containmentRadius(parentI) - collisionRadius(parentI)) / 2 // stop at center between collisionRadius(parentI) and containmentRadius(parentI)
+          val targetDistance = radius(parentI) + Constants.nodePadding + radius(childI)
+          val targetDistanceSq = targetDistance * targetDistance
+          if (distanceSq > targetDistanceSq) {
+            val distanceDiff =  Vec2.length(dx, dy) - targetDistance
             val velocity = distanceDiff * innerVelocityFactor
             val dir = Vec2(dx, dy).normalized
             val childDir = dir * (velocity * alpha * childWeight)
@@ -343,7 +347,7 @@ class ConnectionDistance {
       if (distanceSq > targetDistanceSq) {
         //TODO: avoid Vec2 allocation and sqrt
         val distanceDiff = Vec2.length(dx, dy) - targetDistance
-        val velocity = (distanceDiff * 0.5) // min maxVelocity
+        val velocity = (distanceDiff * 0.5)
         val targetDir = Vec2(dx, dy).normalized * (velocity * alpha)
         val sourceDir = -targetDir
 
@@ -398,6 +402,7 @@ class MetaForce extends CustomForce[SimPost] {
 
   var connections: js.Array[Int] = js.Array()
   var containments: js.Array[Int] = js.Array()
+  var containmentTest:js.Array[js.Array[Boolean]] = js.Array()
 
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
   var containmentRadius: js.Array[Double] = js.Array()
@@ -446,16 +451,28 @@ class MetaForce extends CustomForce[SimPost] {
       val m = containments.size
       this.containments = new js.Array(m * 2)
       this.postParentCount = new js.Array(n)
+      this.containmentTest = new js.Array(n)
       var i = 0
+      var j = 0
       while( i < n) {
         this.postParentCount(i) = 0
+        this.containmentTest(i) = new js.Array(n)
+        j = 0
+        while(j < n) {
+          this.containmentTest(i)(j) = false
+          j += 1
+        }
         i += 1
       }
       i = 0
       while (i < m) {
-        this.containments(i * 2) = postIdToIndex(containments(i).parent.id)
-        this.containments(i * 2 + 1) = postIdToIndex(containments(i).child.id)
-        this.postParentCount(postIdToIndex(containments(i).child.id)) += 1
+        val parentIndex = postIdToIndex(containments(i).parent.id)
+        val childIndex = postIdToIndex(containments(i).child.id)
+        this.containments(i * 2) = parentIndex
+        this.containments(i * 2 + 1) = childIndex
+        this.postParentCount(childIndex) += 1
+        this.containmentTest(parentIndex)(childIndex) = true
+
         i += 1
       }
     }
@@ -467,7 +484,7 @@ class MetaForce extends CustomForce[SimPost] {
       clusterCount = clusters.size
       containmentClusterPolygons = new js.Array(clusterCount)
       nonIntersectingClusterPairs = clusters.toSeq.zipWithIndex.combinations(2).collect {
-        case Seq((a, ai), (b, bi)) if (a.posts intersect b.posts).isEmpty =>
+        case Seq((a, ai), (b, bi))  if (a.posts intersect b.posts).isEmpty =>
           js.Tuple2(ai, bi)
       }.toJSArray
 
@@ -573,7 +590,7 @@ class MetaForce extends CustomForce[SimPost] {
       /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
       /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
       //TODO: custer - connection collision
-      /*time("connectionDistance")*/ { connectionDistance.force(this, alpha) }
+      // /*time("connectionDistance")*/ { connectionDistance.force(this, alpha) }
 
       /*time("force.apply")*/ {
         //write pos + vel to simpost
@@ -633,8 +650,8 @@ object Forces {
     forces.collapsedContainment.distance((c: SimCollapsedContainment) => c.parent.radius + Constants.nodePadding + c.child.radius)
     forces.collapsedContainment.strength(0.01)
 
-    forces.gravityX.strength(0.01)
-    forces.gravityY.strength(0.01)
+    forces.gravityX.strength(0.05)
+    forces.gravityY.strength(0.05)
 
     forces
   }
@@ -644,7 +661,7 @@ object InitialPosition {
   var width: Double = 500
   var height: Double = 500
 
-  val initialRadius = 300
+  val initialRadius = 150
   val initialAngle = Math.PI * (3 - Math.sqrt(5))
 
   def strengthX = width / height.toDouble // longer direction should be farther away
@@ -668,10 +685,11 @@ object Simulation {
   def apply(forces: Forces): Simulation[SimPost] = {
     val alphaMin = 0.7 // stop simulation earlier (default = 0.001)
     val ticks = 100 // Default = 300
+    val forceFactor = 0.1
     d3.forceSimulation[SimPost]()
       .alphaMin(alphaMin)
       .alphaDecay(1 - Math.pow(alphaMin, (1.0 / ticks)))
-      .velocityDecay(0.9) // (1 - velocityDecay) is multiplied before the velocities get applied to the positions https://github.com/d3/d3-force/issues/100
+      .velocityDecay(1 - forceFactor) // (1 - velocityDecay) is multiplied before the velocities get applied to the positions https://github.com/d3/d3-force/issues/100
       .force("meta", forces.meta)
   }
 }
@@ -681,7 +699,7 @@ object Simulation {
 // It should stop when alpha < alphaMin, but is running infinitely, causing a jsdom timeout.
 class D3State(disableSimulation: Boolean = false) {
   //TODO: dynamic by screen size, refresh on window resize, put into centering force
-  val zoom = d3.zoom().on("zoom.settransform", () => zoomed()).scaleExtent(js.Array(0.1, 10))
+  val zoom = d3.zoom().on("zoom.settransform", () => zoomed()).scaleExtent(js.Array(0.01, 10))
   //TODO why does this not work on 2.12, works on 2.11. maybe scalajs function implicit?
   // private def zoomed() { _transform = d3.event.asInstanceOf[ZoomEvent].transform }
   private def zoomed() = { _transform = d3.event.asInstanceOf[ZoomEvent].transform }
