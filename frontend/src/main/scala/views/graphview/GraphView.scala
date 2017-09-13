@@ -231,6 +231,7 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
     d3State.forces.collapsedContainment.links(simCollapsedContainment)
 
     d3State.forces.meta.setConnections(rxSimConnection.now)
+    d3State.forces.meta.setContainments(rxSimContainment.now)
     d3State.forces.meta.setContainmentClusters(rxContainmentCluster.now)
 
     draw() // triggers updating node sizes

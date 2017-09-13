@@ -297,25 +297,27 @@ class Clustering {
 
           vel(i2) += childDir.x
           vel(i2 + 1) += childDir.y
-          vel(parentI2) += parentDir.x
-          vel(parentI2 + 1) += parentDir.y
+          if(postParentCount(childI) >= 2) { 
+            vel(parentI2) += parentDir.x
+            vel(parentI2 + 1) += parentDir.y
+          }
         }
-        // else { // node is inside
-        //   val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
-        //   val minDistanceSq = minDistance * minDistance
-        //   if (distanceSq > minDistanceSq) {
-        //     val distanceDiff =  Vec2.length(dx, dy) - minDistance
-        //     val velocity = distanceDiff * innerVelocityFactor
-        //     val dir = Vec2(dx, dy).normalized
-        //     val childDir = dir * (velocity * alpha * childWeight)
-        //     val parentDir = dir * (velocity * alpha * parentWeight)
+        else { // node is inside
+          val minDistance = radius(childI) + Constants.nodePadding + radius(parentI)
+          val minDistanceSq = minDistance * minDistance
+          if (distanceSq > minDistanceSq) {
+            val distanceDiff =  Vec2.length(dx, dy) - minDistance
+            val velocity = distanceDiff * innerVelocityFactor
+            val dir = Vec2(dx, dy).normalized
+            val childDir = dir * (velocity * alpha * childWeight)
+            val parentDir = dir * (velocity * alpha * parentWeight)
 
-        //     vel(i2) += childDir.x
-        //     vel(i2 + 1) += childDir.y
-        //     vel(parentI2) += parentDir.x
-        //     vel(parentI2 + 1) += parentDir.y
-        //   }
-        // }
+            vel(i2) += childDir.x
+            vel(i2 + 1) += childDir.y
+            // vel(parentI2) += parentDir.x
+            // vel(parentI2 + 1) += parentDir.y
+          }
+        }
         i += 1
       }
       ci += 1
@@ -395,10 +397,12 @@ class MetaForce extends CustomForce[SimPost] {
   var maxRadius = 0.0
 
   var connections: js.Array[Int] = js.Array()
+  var containments: js.Array[Int] = js.Array()
 
   var containmentClusters: js.Array[ContainmentCluster] = js.Array()
   var containmentRadius: js.Array[Double] = js.Array()
   var collisionRadius: js.Array[Double] = js.Array()
+  var postParentCount: js.Array[Int] = js.Array()
   var containmentClusterParentIndex: js.Array[Int] = js.Array()
   var containmentClusterChildrenIndices: js.Array[js.Array[Int]] = js.Array()
   var containmentClusterPostIndices: js.Array[js.Array[Int]] = js.Array()
@@ -432,6 +436,26 @@ class MetaForce extends CustomForce[SimPost] {
       while (i < m) {
         this.connections(i * 2) = postIdToIndex(connections(i).source.id)
         this.connections(i * 2 + 1) = postIdToIndex(connections(i).target.id)
+        i += 1
+      }
+    }
+  }
+
+  def setContainments(containments: js.Array[SimContainment]) {
+    /*time("setConnections")*/ {
+      val m = containments.size
+      this.containments = new js.Array(m * 2)
+      this.postParentCount = new js.Array(n)
+      var i = 0
+      while( i < n) {
+        this.postParentCount(i) = 0
+        i += 1
+      }
+      i = 0
+      while (i < m) {
+        this.containments(i * 2) = postIdToIndex(containments(i).parent.id)
+        this.containments(i * 2 + 1) = postIdToIndex(containments(i).child.id)
+        this.postParentCount(postIdToIndex(containments(i).child.id)) += 1
         i += 1
       }
     }
@@ -544,10 +568,10 @@ class MetaForce extends CustomForce[SimPost] {
       // /*time("gravity")*/ { gravity.force(this, alpha) }
       /*time("rectBound")*/ { rectBound.force(this, alpha) }
       /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding) }
-      /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding*3, strength = 0.1) }
+      // /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding*3, strength = 0.1) }
       /*time("clustering")*/ { clustering.force(this, alpha) }
-      /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
-      /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
+      // /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
+      // /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
       //TODO: custer - connection collision
       // /*time("connectionDistance")*/ { connectionDistance.force(this, alpha) }
 
