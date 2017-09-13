@@ -280,8 +280,8 @@ class Clustering {
         val targetDistance = containmentRadius(parentI) - containmentRadius(childI)
         val targetDistanceSq = targetDistance * targetDistance
 
-        val childWeight = (n - 1.0) / n
-        val parentWeight = 1.0 / n
+        val childWeight = n / (n+1.0)
+        val parentWeight = 1.0 / (n+1.0)
 
         val i2 = childI * 2
         val dx = pos(parentI2) - pos(i2)
@@ -297,7 +297,7 @@ class Clustering {
 
           vel(i2) += childDir.x
           vel(i2 + 1) += childDir.y
-          if(postParentCount(childI) >= 2) { 
+          if(postParentCount(childI) >= 2) {
             vel(parentI2) += parentDir.x
             vel(parentI2 + 1) += parentDir.y
           }
@@ -570,10 +570,10 @@ class MetaForce extends CustomForce[SimPost] {
       /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding) }
       // /*time("keepDistance")*/ { keepDistance.force(this, alpha, distance = Constants.nodePadding*3, strength = 0.1) }
       /*time("clustering")*/ { clustering.force(this, alpha) }
-      // /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
-      // /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
+      /*time("pushOutOfWrongCluster")*/ { pushOutOfWrongCluster.force(this, alpha) }
+      /*time("clusterCollision")*/ { clusterCollision.force(this, alpha) }
       //TODO: custer - connection collision
-      // /*time("connectionDistance")*/ { connectionDistance.force(this, alpha) }
+      /*time("connectionDistance")*/ { connectionDistance.force(this, alpha) }
 
       /*time("force.apply")*/ {
         //write pos + vel to simpost

@@ -188,7 +188,8 @@ class GraphView(state: GlobalState, element: dom.html.Element, disableSimulation
         // DevPrintln(graph.allParentIds.map(postId => rxPostIdToSimPost.now(postId).containmentArea).toString)
         // DevPrintln(rxSimPosts.now.map(_.collisionArea).toString)
         // val postsArea = graph.toplevelPostIds.map( postId => rxPostIdToSimPost.now(postId).containmentArea ).sum
-        val postsArea = rxSimPosts.now.foldLeft(0.0)((sum,post) => sum + post.collisionBoundingSquareArea) * 4 // 4 is an arbitrary factor to have more space
+        val arbitraryFactor = 1
+        val postsArea = rxSimPosts.now.foldLeft(0.0)((sum,post) => sum + post.collisionBoundingSquareArea) * arbitraryFactor
         val scale = sqrt((width * height) / postsArea) // min 1.5   // scale = sqrt(ratio) because areas grow quadratically
         // DevPrintln(s"    parentsArea: $postsArea, window: ${width * height}")
         // DevPrintln(s"    scale: $scale")
