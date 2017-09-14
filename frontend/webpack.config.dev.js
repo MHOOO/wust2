@@ -1,0 +1,30 @@
+const Webpack = require('webpack');
+const Path = require('path');
+
+const rootDir = Path.resolve(__dirname, '../../../../..');
+
+
+module.exports = require('./scalajs.webpack.config');
+
+// https://webpack.js.org/configuration/dev-server
+module.exports.devServer = {
+    contentBase: [
+        __dirname,
+        Path.resolve(rootDir, 'assets/public'), // css files, ...
+        Path.resolve(rootDir, 'assets/dev') // development index.html
+    ],
+    watchContentBase: true,
+    // watchOptions: {
+    //     poll: true
+    // },
+    // open: false, // open page in browser
+    // inline: true,
+    hot: true
+};
+
+module.exports.plugins = [
+    new Webpack.HotModuleReplacementPlugin()
+];
+
+
+

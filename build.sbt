@@ -78,18 +78,17 @@ lazy val root = project.in(file("."))
     publish := {},
     publishLocal := {},
 
-    addCommandAlias("clean", "; root/clean; assets/clean; workbench/clean"),
+    addCommandAlias("clean", "; root/clean; assets/clean"),
 
-    addCommandAlias("devwatch", "~; backend/re-start; workbench/assets"),
-    addCommandAlias("dev", "; project root; devwatch"),
-    addCommandAlias("devfwatch", "~workbench/assets"),
-    addCommandAlias("devf", "; project root; backend/re-start; devfwatch"),
+    addCommandAlias("dev", "; project root; compile; frontend/fastOptJS::startWebpackDevServer; devwatch"),
+    addCommandAlias("devwatch", "~; backend/re-start; frontend/fastOptJS"),
+
+    addCommandAlias("devf", "; project root; compile; backend/re-start; frontend/fastOptJS::startWebpackDevServer; devfwatch"),
+    addCommandAlias("devfwatch", "~frontend/fastOptJS"),
 
     addCommandAlias("testJS", "; utilJS/test; graphJS/test; frameworkJS/test; apiJS/test; frontend/test"),
     addCommandAlias("testJSOpt", "; set scalaJSStage in Global := FullOptStage; testJS"),
-    addCommandAlias("testJVM", "; utilJVM/test; graphJVM/test; frameworkJVM/test; apiJVM/test; database/test; backend/test"),
-
-    watchSources ++= (watchSources in workbench).value
+    addCommandAlias("testJVM", "; utilJVM/test; graphJVM/test; frameworkJVM/test; apiJVM/test; database/test; backend/test")
   )
 
 val akkaVersion = "2.4.20"
@@ -238,16 +237,17 @@ lazy val frontend = project
       "com.github.cornerman" %% "delegert" % "0.1.0-SNAPSHOT" ::
       Nil
     ),
-    requiresDOM := true, // still required because of bundler: https://gitter.im/scala-js/scala-js?at=59b55f12177fb9fe7ea2beff
+    requiresDOM := true, // still required by bundler: https://gitter.im/scala-js/scala-js?at=59b55f12177fb9fe7ea2beff
     // jsEnv := new org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv(), // runs scalajs tests with node + jsdom. Requires jsdom to be installed
 
     scalaJSUseMainModuleInitializer := true,
     // scalaJSOptimizerOptions in fastOptJS ~= { _.withDisableOptimizer(true) }, // disable optimizations for better debugging experience
-    useYarn := true, // instead of npm
-    webpackBundlingMode := BundlingMode.LibraryOnly(), // https://scalacenter.github.io/scalajs-bundler/cookbook.html#performance
+
     //TODO: scalaJSLinkerConfig instead of emitSOurceMaps, scalajsOptimizer,...
-    emitSourceMaps := false,
+    // emitSourceMaps in fastOptJS := false,
     emitSourceMaps in fullOptJS := false,
+
+    useYarn := true, // instead of npm
     npmDependencies in Compile ++= (
       "cuid" -> "1.3.8" ::
       Nil
@@ -258,32 +258,17 @@ lazy val frontend = project
       "webpack-closure-compiler" -> "2.1.4" ::
       Nil
     ),
-    webpackConfigFile in fullOptJS := Some(baseDirectory.value / "scalajsbundler.config.js") // renamed due to https://github.com/scalacenter/scalajs-bundler/issues/123
+
+    webpackBundlingMode in fastOptJS := BundlingMode.LibraryOnly(), // https://scalacenter.github.io/scalajs-bundler/cookbook.html#performance
+    // webpackBundlingMode in fullOptJS := BundlingMode.Application,
+    webpackDevServerPort := 12345,
+    webpackDevServerExtraArgs := Seq("--progress", "--color"),
+
+    webpackConfigFile in fastOptJS := Some(baseDirectory.value / "webpack.config.dev.js"),
+    webpackConfigFile in fullOptJS := Some(baseDirectory.value / "webpack.config.prod.js")
   )
 
-lazy val DevWorkbenchPlugins = if (isCI) Seq.empty else Seq(WorkbenchPlugin)
-lazy val DevWorkbenchSettings = if (isCI) Seq.empty else Seq(
-  refreshBrowsers := (refreshBrowsers.triggeredBy(WebKeys.assets in Assets)).value //TODO: do not refresh if compilation failed
-)
-
-lazy val workbench = project
-  .enablePlugins(SbtWeb, ScalaJSWeb, WebScalaJSBundlerPlugin)
-  .enablePlugins(DevWorkbenchPlugins: _*)
-  .settings(DevWorkbenchSettings: _*)
-  .settings(
-    // we have a symbolic link from src -> ../frontend/src
-    // to correct the paths in the source-map
-    scalaSource := baseDirectory.value / "src-not-found",
-
-    devCommands in scalaJSPipeline ++= Seq("assets"), // build assets in dev mode
-    unmanagedResourceDirectories in Assets += (baseDirectory in assets).value / "public", // include other assets
-
-    scalaJSProjects := Seq(frontend),
-    pipelineStages in Assets := Seq(scalaJSPipeline),
-
-    watchSources += baseDirectory.value / "index.html",
-    watchSources ++= (watchSources in assets).value
-  )
+//TODO: https://github.com/jantimon/html-webpack-plugin for asset checksums
 
 lazy val assets = project
   .enablePlugins(SbtWeb, ScalaJSWeb, WebScalaJSBundlerPlugin)
@@ -293,12 +278,18 @@ lazy val assets = project
       IO.write(file, version.value)
       Seq(file)
     },
-    unmanagedResourceDirectories in Assets += baseDirectory.value / "public",
+    unmanagedResourceDirectories in Assets ++= (
+      baseDirectory.value / "public" ::
+      baseDirectory.value / "prod" ::
+      Nil
+    ),
     scalaJSProjects := Seq(frontend),
     npmAssets ++= {
       // without dependsOn, the file list is generated before webpack does its thing.
       // Which would mean that generated files by webpack do not land in the pipeline.
-      val assets = ((npmUpdate in Compile in frontend).dependsOn(webpack in fullOptJS in Compile in frontend).value ** "*.gz") +++ ((npmUpdate in Compile in frontend).dependsOn(webpack in fullOptJS in Compile in frontend).value ** "*.br")
+      val assets =
+        ((npmUpdate in Compile in frontend).dependsOn(webpack in fullOptJS in Compile in frontend).value ** "*.gz") +++
+          ((npmUpdate in Compile in frontend).dependsOn(webpack in fullOptJS in Compile in frontend).value ** "*.br")
       val nodeModules = (npmUpdate in (frontend, Compile)).value
       assets.pair(relativeTo(nodeModules))
     },

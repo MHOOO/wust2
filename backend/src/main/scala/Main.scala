@@ -17,5 +17,5 @@ object Main extends App {
   Logger.root.addHandler(LogHandler(Level.Info, formatter, ConsoleWriter))
 
   scribe.info(s"Starting wust with Config: $Config")
-  Server.run(8080)
+  Server.run(8080) //TODO: put port number in config
 }
