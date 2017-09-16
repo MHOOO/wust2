@@ -12,37 +12,45 @@ import autowire._
 import boopickle.Default._
 import wust.api._
 
-import org.scalajs.dom.{window, document, console}
-import scalatags.JsDom.all._
+import org.scalajs.dom.{ window, document, console }
 import scala.scalajs.js
-import scalatags.rx.all._
+
+import outwatch.dom._
 
 object TestView {
 
-  def postItem(state: GlobalState, post: Post)(implicit ctx: Ctx.Owner) = {
-    div(
-      minHeight := "12px",
-      border := "solid 1px",
-      cursor.pointer,
-      onclick := { () =>
-        state.graphSelection() = GraphSelection.Union(Set(post.id))
-      },
-      post.title
-    )
-  }
+  // def postItem(state: GlobalState, post: Post)(implicit ctx: Ctx.Owner) = {
+  //   div(
+  // minHeight := "12px",
+  // border := "solid 1px",
+  // cursor.pointer,
+  // onclick := { () =>
+  //   state.graphSelection() = GraphSelection.Union(Set(post.id))
+  // },
+  // post.title
+  // )
+  // }
 
-  def apply(state: GlobalState)(implicit ctx: Ctx.Owner) = div(
-    state.displayGraphWithoutParents.map { dg =>
-      val graph = dg.graph
-      val sortedPosts = HierarchicalTopologicalSort(graph.postIds, successors = graph.successors, children = graph.children)
-
-      div(
-        padding := "20px",
-        sortedPosts.map { postId =>
-          val post = graph.postsById(postId)
-          postItem(state, post)
-        }
-      ).render
+  def apply(state: GlobalState)(implicit ctx: Ctx.Owner) = {
+    val graphSelection = rxscalajs.Subject[GraphSelection]()
+    state.graphSelection.foreach { x =>
+      graphSelection.next(x)
     }
-  )
+
+    // state.displayGraphWithoutParents.map { dg =>
+    //   val graph = dg.graph
+    //   val sortedPosts = HierarchicalTopologicalSort(graph.postIds, successors = graph.successors, children = graph.children)
+
+    //   div( // padding := "20px",
+    //   // sortedPosts.map { postId =>
+    //   //   val post = graph.postsById(postId)
+    //   //   postItem(state, post)
+    //   // }
+    //   ).render
+    // }
+    val outwatchdiv = div("täst")
+    val el = scalatags.JsDom.all.div().render
+    helpers.DomUtils.render(el, outwatchdiv)
+    el
+  }
 }

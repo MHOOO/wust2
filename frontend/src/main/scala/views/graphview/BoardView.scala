@@ -162,6 +162,6 @@ object BoardView {
                     insertForm
                   )      
                 }
-    )
+    ).render
   }
 }

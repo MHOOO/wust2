@@ -58,7 +58,9 @@ object Main {
     Client.onEvents(state.onEvents)
 
     // The first thing to be sent should be the auth-token
+    println("passiert dies(")
     ClientCache.storedToken.foreach { token =>
+      println("passiert dies(")
       Client.auth.loginToken(token).call()
     }
 

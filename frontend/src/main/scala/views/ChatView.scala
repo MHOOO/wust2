@@ -77,7 +77,7 @@ object ChatView {
                 margin := "5px 0px",
                 // TODO: What about curson when selecting text?
                 cursor.pointer,
-                onclick := { () => if(window.getSelection().toString().isEmpty) { state.graphSelection() = GraphSelection.Union(Set(post.id))} }
+                onclick := { () => if (window.getSelection().toString().isEmpty) { state.graphSelection() = GraphSelection.Union(Set(post.id)) } }
               )
             )
           }
@@ -89,7 +89,7 @@ object ChatView {
       //TODO: scrollHeight is not yet available in jsdom tests: https://github.com/tmpvar/jsdom/issues/1013
       try {
         chatHistoryDiv.scrollTop = chatHistoryDiv.scrollHeight
-      } catch { case _:Throwable => } // with NonFatal(_) it fails in the tests
+      } catch { case _: Throwable => } // with NonFatal(_) it fails in the tests
     }
 
     setTimeout(200) {
@@ -142,6 +142,6 @@ object ChatView {
         chatHistoryDiv,
         insertForm
       )
-    )
+    ).render
   }
 }
