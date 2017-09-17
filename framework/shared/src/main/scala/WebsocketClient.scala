@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 
 import boopickle.Default._
 import wust.framework.message._
+import scala.util.control.NonFatal
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -24,8 +25,12 @@ class WebsocketClient[Event: Pickler, Error: Pickler](ws: WebsocketConnection)(i
     import java.util.{Timer, TimerTask}
     val timer = new Timer
     () => {
-      timer.cancel()
-      timer.purge()
+      try {
+        timer.cancel()
+        timer.purge()
+      } catch {
+        case NonFatal(_) =>
+      }
       val task = new TimerTask { def run() = send(Ping()) }
       timer.schedule(task, pingIdleMillis)
     }

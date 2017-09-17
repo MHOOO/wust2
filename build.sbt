@@ -66,12 +66,6 @@ lazy val commonSettings = Seq(
 
 lazy val isCI = sys.env.get("CI").isDefined // set by travis
 
-lazy val config = file("config")
-lazy val configSettings = Seq(
-  unmanagedResourceDirectories in Runtime += config,
-  unmanagedResourceDirectories in Compile += config
-)
-
 lazy val root = project.in(file("."))
   .aggregate(apiJS, apiJVM, database, backend, frameworkJS, frameworkJVM, frontend, graphJS, graphJVM, utilJS, utilJVM, systemTest, nginx, dbMigration)
   .settings(
@@ -204,7 +198,6 @@ lazy val backend = project
   .dependsOn(frameworkJVM, apiJVM, database)
   .configs(IntegrationTest)
   .settings(Defaults.itSettings)
-  .settings(configSettings)
   .settings(
     libraryDependencies ++=
       "org.typelevel" %% "cats-core" % "1.0.0-MF" ::
@@ -259,6 +252,16 @@ lazy val frontend = project
       Nil
     ),
     webpackConfigFile in fullOptJS := Some(baseDirectory.value / "scalajsbundler.config.js") // renamed due to https://github.com/scalacenter/scalajs-bundler/issues/123
+  )
+
+lazy val slackApp = project
+  .settings(commonSettings)
+  .dependsOn(frameworkJVM, apiJVM)
+  .settings(
+    libraryDependencies ++=
+      "com.github.cornerman" %% "autoconfig" % "0.1.0-SNAPSHOT" ::
+      "com.github.gilbertw1" %% "slack-scala-client" % "0.2.1" ::
+      Nil
   )
 
 lazy val DevWorkbenchPlugins = if (isCI) Seq.empty else Seq(WorkbenchPlugin)
