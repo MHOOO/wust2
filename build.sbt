@@ -236,6 +236,7 @@ lazy val frontend = project
       "com.github.fdietze" %%% "scala-js-d3v4" % "0.1.0-SNAPSHOT" ::
       "com.github.cornerman" %% "derive" % "0.1.0-SNAPSHOT" ::
       "com.github.cornerman" %% "delegert" % "0.1.0-SNAPSHOT" ::
+      "io.github.outwatch" %%% "outwatch" % "0.10.2" ::
       Nil
     ),
     requiresDOM := true, // still required because of bundler: https://gitter.im/scala-js/scala-js?at=59b55f12177fb9fe7ea2beff
